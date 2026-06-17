@@ -1,17 +1,13 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/next"
+  "experimentalServices": {
+    "frontend": {
+      "root": "frontend",
+      "routePrefix": "/",
+      "framework": "nextjs"
     },
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "50mb" }
+    "backend": {
+      "root": "backend",
+      "routePrefix": "/_/backend"
     }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.py" }
-  ]
+  }
 }
