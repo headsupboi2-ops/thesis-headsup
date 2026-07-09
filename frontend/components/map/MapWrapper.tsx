@@ -4,7 +4,8 @@ import {
   type ReactNode, type MutableRefObject,
 } from 'react'
 import type { Map as LMap, TileLayer, Layer } from 'leaflet'
-import { MAP_TILES, PAR, CAT_COLOR } from '@/lib/constants'
+import { MAP_TILES, CAT_COLOR } from '@/lib/constants'
+import { PAR_BOUNDARY } from '@/lib/par'
 import { useDashboard } from '@/hooks/useDashboardState'
 import type { StormCategory } from '@/lib/types'
 
@@ -65,10 +66,10 @@ export function MapWrapper({ children }: { children?: ReactNode }) {
 
       L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map)
 
-      // PAR boundary rectangle
-      L.rectangle([[PAR.latMin, PAR.lonMin],[PAR.latMax, PAR.lonMax]], {
+      // Official PAR boundary polygon (PAGASA coordinates)
+      L.polyline(PAR_BOUNDARY, {
         color:'#0052cc', weight:1.5, opacity:0.35,
-        fill:false, dashArray:'7,10', interactive:false,
+        dashArray:'7,10', interactive:false,
       }).addTo(map)
 
       bgGroupRef.current = L.layerGroup().addTo(map)

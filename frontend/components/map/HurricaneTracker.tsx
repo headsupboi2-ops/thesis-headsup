@@ -1,8 +1,14 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMapRef } from './MapWrapper'
 import { useDashboard } from '@/hooks/useDashboardState'
-import { API_BASE, CAT_COLOR, PAR } from '@/lib/constants'
+import { API_BASE, CAT_COLOR } from '@/lib/constants'
+import { generateEnsembleSpaghettiPlot, type ModelTrack, type MultiModelResponse } from '@/lib/forecastModels'
+import { PAR_BOUNDARY, isInPar } from '@/lib/par'
+import { ParAlerts, computeParAlerts } from '../alerts/ParAlerts'
+import { NotificationCenter } from '../alerts/NotificationCenter'
+import { useParBroadcastEngine } from '@/hooks/useParBroadcastEngine'
+import { ModelLegend } from './ModelLegend'
 
 interface StormPoint { lat: number; lon: number }
 interface LiveStorm {
@@ -20,15 +26,8 @@ interface TrackedStorm {
   entersParAt?: number
 }
 
-const PAR_POLY = [
-  [PAR.latMax, PAR.lonMin], [PAR.latMax, PAR.lonMax],
-  [PAR.latMin, PAR.lonMax], [PAR.latMin, PAR.lonMin],
-  [PAR.latMax, PAR.lonMin],
-] as [number, number][]
-
-function inPar(lat: number, lon: number) {
-  return lat >= PAR.latMin && lat <= PAR.latMax && lon >= PAR.lonMin && lon <= PAR.lonMax
-}
+const LIVE_POLL_MS = 600_000        // matches backend live_storms_cache refresh loop
+const MODEL_TRACK_TTL_MS = 600_000  // matches backend multi-model track cache TTL
 
 function windToCategory(kt: number) {
   if (kt < 34) return 0
@@ -84,16 +83,23 @@ export function HurricaneTracker() {
   const mapRef = useMapRef()
   const { state } = useDashboard()
   const [storms, setStorms] = useState<TrackedStorm[]>([])
-  const [warning, setWarning] = useState<string | null>(null)
   const [fetchStatus, setFetchStatus] = useState<'idle'|'loading'|'ok'|'empty'|'error'>('idle')
   const [stormCount, setStormCount] = useState(0)
 
   const tracksRef  = useRef<import('leaflet').Layer[]>([])  // historical + forecast lines
   const markersRef = useRef<import('leaflet').Layer[]>([])  // animated position circle + label
+  const spaghettiRef = useRef<import('leaflet').Layer[]>([]) // multi-model ensemble polylines
   const [retryTick, setRetryTick] = useState(0)
+
+  // Multi-model ensemble tracks per storm name (10 agencies).
+  // Refetched once per TTL so consensus-change detection sees fresh data.
+  const [modelTracks, setModelTracks] = useState<Record<string, ModelTrack[]>>({})
+  const modelFetchAt = useRef<Record<string, number>>({})   // storm → epoch ms of last fetch
 
   const active      = state.activeLayer === 'hurricane'
   const forecastHour = state.forecastHour   // 0–168
+  const enabledModels = state.enabledModels
+  const showAiLine = enabledModels.includes('AI_ENSEMBLE')
 
   // ── Fetch live storms ─────────────────────────────────────────
   // Depends only on [active, retryTick] — NOT on fetchStatus — so that
@@ -121,7 +127,9 @@ export function HurricaneTracker() {
 
         setFetchStatus('ok')
         setStormCount(data.length)
-        if (!cancelled) setStorms(data.map(storm => ({ info: storm, forecast: [] })))
+        // Phase-1 quick render only on the first load — on 10-min refreshes,
+        // keep the existing forecasts on screen until Phase 2 replaces them.
+        if (!cancelled) setStorms(prev => prev.length ? prev : data.map(storm => ({ info: storm, forecast: [] })))
 
         const tracked: TrackedStorm[] = await Promise.all(
           data.map(async (storm) => {
@@ -140,7 +148,7 @@ export function HurricaneTracker() {
               )
               let entersParAt: number | undefined
               for (const step of forecast) {
-                if (inPar(step.lat, step.lon)) { entersParAt = step.hour; break }
+                if (isInPar(step.lat, step.lon)) { entersParAt = step.hour; break }
               }
               return { info: storm, forecast, entersParAt }
             } catch {
@@ -149,15 +157,7 @@ export function HurricaneTracker() {
           })
         )
 
-        if (!cancelled) {
-          setStorms(tracked)
-          const approaching = tracked.filter(s => s.entersParAt !== undefined)
-          if (approaching.length) {
-            setWarning(`Storms may enter PAR: ${approaching.map(s => `${s.info.name} (~${Math.round((s.entersParAt ?? 0) / 24)}d)`).join(', ')}`)
-          } else {
-            setWarning(null)
-          }
-        }
+        if (!cancelled) setStorms(tracked)
       } catch {
         if (!cancelled) {
           setFetchStatus('error')
@@ -169,6 +169,58 @@ export function HurricaneTracker() {
     load()
     return () => { cancelled = true }
   }, [active, retryTick])
+
+  const hasPannedRef = useRef(false)
+  useEffect(() => { if (!active) hasPannedRef.current = false }, [active])
+
+  // ── Poll live positions every 10 min while active ─────────────
+  // Matches the backend's live_storms_cache refresh cadence; keeps the
+  // 3-hour broadcast packets carrying fresh fixes instead of stale ones.
+  useEffect(() => {
+    if (!active) return
+    const id = setInterval(() => setRetryTick(t => t + 1), LIVE_POLL_MS)
+    return () => clearInterval(id)
+  }, [active])
+
+  // ── Fetch multi-model ensemble tracks (10 agencies) per storm ─────
+  // Refetched once per MODEL_TRACK_TTL_MS (matches the backend's cache) so
+  // the spaghetti plot and consensus-change detection track feed updates.
+  // If the backend (or the live agency servers) are unreachable, fall back
+  // to the local deterministic mock injector so the UI still works offline.
+  useEffect(() => {
+    if (!active) return
+    for (const storm of storms) {
+      const name = storm.info.name
+      const fetchedAt = modelFetchAt.current[name]
+      if (fetchedAt && Date.now() - fetchedAt < MODEL_TRACK_TTL_MS) continue
+      const history = storm.info.path?.length > 1 ? storm.info.path.slice(-16) : null
+      const localBase = storm.forecast
+        .filter(s => s.hour % 6 === 0 && s.hour <= 120)
+        .map(s => ({ lat: s.lat, lon: s.lon, hour: s.hour, wind_kt: s.wind_speed ?? null }))
+      if (!history && localBase.length < 2) continue  // nothing to work with yet — retry on next storms update
+      modelFetchAt.current[name] = Date.now()
+      ;(async () => {
+        try {
+          if (!history) throw new Error('insufficient track history')
+          const res = await fetch(`${API_BASE}/api/multi-model-tracks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storm_name: name, track_history: history }),
+          })
+          if (!res.ok) throw new Error(`multi-model fetch failed: ${res.status}`)
+          const data: MultiModelResponse = await res.json()
+          setModelTracks(prev => ({ ...prev, [name]: data.models }))
+        } catch (err) {
+          console.warn('[HurricaneTracker] multi-model fetch failed, using local mock ensemble:', err)
+          if (localBase.length > 1) {
+            setModelTracks(prev => ({ ...prev, [name]: generateEnsembleSpaghettiPlot(localBase, name) }))
+          } else {
+            delete modelFetchAt.current[name]  // allow retry once the AI forecast arrives
+          }
+        }
+      })()
+    }
+  }, [active, storms])
 
   // ── Effect 1: Static tracks — historical path, forecast line, day markers ──
   // Only redraws when the storm list changes, NOT on every timeline scrub.
@@ -188,11 +240,13 @@ export function HurricaneTracker() {
       const add = (l: import('leaflet').Layer) => { l.addTo(m!); layers.push(l) }
 
       try {
-        // PAR boundary
-        add(L.polyline(PAR_POLY, { color: '#4488ff', weight: 1.5, dashArray: '6 4', opacity: 0.6 }))
+        // Official PAR boundary polygon
+        add(L.polyline(PAR_BOUNDARY, { color: '#4488ff', weight: 1.5, dashArray: '6 4', opacity: 0.6 }))
 
-        // Pan to first storm once
-        if (storms.length > 0) {
+        // Pan to first storm once per layer activation — not on every
+        // 10-min position refresh, which would yank the map from the user.
+        if (storms.length > 0 && !hasPannedRef.current) {
+          hasPannedRef.current = true
           const first = storms[0].info
           m.setView([first.lat, first.lon], Math.max(m.getZoom(), 5), { animate: true })
         }
@@ -211,8 +265,9 @@ export function HurricaneTracker() {
             }
           }
 
-          // Forecast track — dashed, colored
-          if (forecast.length > 1) {
+          // Forecast track (our AI model) — dashed, colored; toggled via the
+          // AI Ensemble entry in the model legend
+          if (forecast.length > 1 && showAiLine) {
             const fcLL = [
               [info.lat, info.lon] as [number, number],
               ...forecast.map(s => [s.lat, s.lon] as [number, number]),
@@ -253,7 +308,62 @@ export function HurricaneTracker() {
       tracksRef.current.forEach(l => { try { map.removeLayer(l) } catch {} })
       tracksRef.current = []
     }
-  }, [active, storms, mapRef])
+  }, [active, storms, mapRef, showAiLine])
+
+  // ── Effect 1.5: Multi-model spaghetti polylines ────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    spaghettiRef.current.forEach(l => { try { map.removeLayer(l) } catch {} })
+    spaghettiRef.current = []
+
+    if (!active || !storms.length) return
+
+    import('leaflet').then((L) => {
+      const m = mapRef.current
+      if (!m) return
+      const layers: import('leaflet').Layer[] = []
+
+      try {
+        for (const storm of storms) {
+          const tracks = modelTracks[storm.info.name]
+          if (!tracks) continue
+          for (const track of tracks) {
+            // AI_ENSEMBLE is already drawn as the main category-colored forecast line
+            if (track.model === 'AI_ENSEMBLE') continue
+            if (!enabledModels.includes(track.model)) continue
+            if (track.points.length < 2) continue
+
+            const latlngs = [
+              [storm.info.lat, storm.info.lon] as [number, number],
+              ...track.points.map(p => [p.lat, p.lon] as [number, number]),
+            ]
+            const line = L.polyline(latlngs, {
+              color: track.color,
+              weight: track.model === 'PAGASA' ? 2.5 : 1.8,
+              opacity: track.source === 'live' ? 0.9 : 0.55,
+              dashArray: track.source === 'live' ? undefined : '4 6',
+            }).bindTooltip(
+              `<b>${track.label}</b> · ${track.source === 'live' ? 'LIVE' : 'SIMULATED'}<br/>${storm.info.name} forecast track`,
+              { sticky: true, className: 'storm-tip' },
+            )
+            line.addTo(m)
+            layers.push(line)
+          }
+        }
+      } catch (err) {
+        console.error('[HurricaneTracker] spaghetti draw error:', err)
+      }
+
+      spaghettiRef.current = layers
+    })
+
+    return () => {
+      spaghettiRef.current.forEach(l => { try { map.removeLayer(l) } catch {} })
+      spaghettiRef.current = []
+    }
+  }, [active, storms, modelTracks, enabledModels, mapRef])
 
   // ── Effect 2: Animated marker — updates on every timeline scrub ──
   useEffect(() => {
@@ -328,6 +438,48 @@ export function HurricaneTracker() {
     }
   }, [active, storms, forecastHour, mapRef])
 
+  // ── PAR geo-fence alerts — current positions + all 10 model trajectories ──
+  const parAlerts = useMemo(() => computeParAlerts(storms, modelTracks), [storms, modelTracks])
+
+  // ── 3-hour broadcast loop for storms inside the PAR ──
+  const { log: broadcastLog, toast: broadcastToast, dismissToast, clearLog, latestHeadlines } =
+    useParBroadcastEngine(storms, modelTracks, parAlerts)
+
+  // The crimson banner text follows the newest 3-hour snapshot
+  const alertsWithHeadlines = useMemo(
+    () => parAlerts.map(a =>
+      a.status === 'inside' && latestHeadlines[a.storm]
+        ? { ...a, headline: latestHeadlines[a.storm] }
+        : a),
+    [parAlerts, latestHeadlines],
+  )
+
+  const [savingChart, setSavingChart] = useState<string | null>(null)
+
+  async function saveChart(storm: TrackedStorm) {
+    setSavingChart(storm.info.name)
+    try {
+      const path = storm.info.path?.length ? storm.info.path.slice(-16) : [{ lat: storm.info.lat, lon: storm.info.lon }]
+      const res = await fetch(`${API_BASE}/api/forecast/chart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storm_name: storm.info.name, track_history: path }),
+      })
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${storm.info.name}_7day_forecast.png`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Save chart failed:', err)
+    } finally {
+      setSavingChart(null)
+    }
+  }
+
   if (!active) return null
 
   const statusMsg =
@@ -338,6 +490,7 @@ export function HurricaneTracker() {
     null
 
   const isForecasting = forecastHour > 0 && storms.some(s => s.forecast.length > 0)
+  const forecastedStorms = storms.filter(s => s.forecast.length > 0)
 
   return (
     <>
@@ -365,16 +518,50 @@ export function HurricaneTracker() {
         </div>
       )}
 
-      {warning && (
-        <div className="fixed z-[850] flex items-center gap-2 px-4 py-2 text-white text-sm font-semibold"
-          style={{
-            top: statusMsg ? 92 : 58, left: '50%', transform: 'translateX(-50%)',
-            background: 'linear-gradient(90deg,#cc2200,#ff4400)',
-            borderRadius: 8, boxShadow: '0 4px 16px rgba(200,0,0,0.4)',
-            maxWidth: 480,
-          }}>
-          <span style={{ fontSize: 16 }}>⚠</span>
-          {warning}
+      {/* Multi-model ensemble legend — toggle the 10 agency tracks */}
+      {storms.length > 0 && (
+        <ModelLegend tracks={Object.values(modelTracks).flat()} />
+      )}
+
+      {/* PAR geo-fence alerts — entered / approaching / watch, with browser notifications.
+          Inside-PAR banner text follows the latest 3-hour broadcast snapshot. */}
+      <ParAlerts alerts={alertsWithHeadlines} top={statusMsg ? 92 : 58} />
+
+      {/* 3-hour broadcast log, slide-out timeline, and update toast */}
+      <NotificationCenter
+        log={broadcastLog}
+        toast={broadcastToast}
+        onDismissToast={dismissToast}
+        onClearLog={clearLog}
+      />
+
+      {/* Save forecast chart buttons — one per tracked storm */}
+      {forecastedStorms.length > 0 && (
+        <div className="fixed z-[850] flex flex-col gap-1.5"
+          style={{ bottom: 130, right: 16 }}>
+          {forecastedStorms.map(storm => (
+            <button
+              key={storm.info.name}
+              onClick={() => saveChart(storm)}
+              disabled={savingChart === storm.info.name}
+              style={{
+                background: savingChart === storm.info.name ? '#334466' : '#0052cc',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                padding: '6px 12px',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: savingChart === storm.info.name ? 'default' : 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {savingChart === storm.info.name
+                ? `Generating ${storm.info.name}…`
+                : `Save ${storm.info.name} Forecast`}
+            </button>
+          ))}
         </div>
       )}
     </>

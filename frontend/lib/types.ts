@@ -1,3 +1,5 @@
+import type { ForecastModelId } from './forecastModels'
+
 // ── Enumerations ──────────────────────────────────────────
 export type LayerType =
   | 'wind' | 'rain' | 'temp' | 'heat' | 'cloud' | 'wave' | 'seasonal' | 'satellite'
@@ -108,6 +110,7 @@ export interface DashboardState {
   windGrid: WindGrid | null
   seasonalData: SeasonalOutlook | null
   hoverInfo: HoverInfo | null
+  enabledModels: ForecastModelId[]   // multi-model ensemble tracks shown on map
 }
 
 export type DashboardAction =
@@ -125,3 +128,5 @@ export type DashboardAction =
   | { type: 'SET_SEASONAL_DATA'; data: SeasonalOutlook | null }
   | { type: 'SET_HOVER';         info: HoverInfo }
   | { type: 'CLEAR_HOVER' }
+  | { type: 'TOGGLE_MODEL';      model: ForecastModelId }
+  | { type: 'SET_ENABLED_MODELS'; models: ForecastModelId[] }

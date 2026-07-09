@@ -1165,6 +1165,56 @@ def forecast_smart():
     })
 
 
+@app.route('/api/multi-model-tracks', methods=['POST'])
+def multi_model_tracks():
+    """
+    Aggregate 10-agency forecast tracks (spaghetti plot) for one storm.
+
+    Request body (JSON):
+    {
+        "storm_name":    "CARINA",
+        "track_history": [{"lat":..,"lon":..,"pressure":..,"wind_speed":..}, ...]  // >= 2 pts
+    }
+
+    Response:
+    {
+        "storm": "CARINA",
+        "base_method": "physics" | "lstm+rf" | "dead-reckoning",
+        "models": [
+            {"model":"PAGASA","label":..,"agency":..,"color":"#FF3B30",
+             "source":"live"|"mock",
+             "points":[{"lat":..,"lon":..,"hour":..,"wind_kt":..}, ...],
+             "geojson": <GeoJSON Feature<LineString>>},
+            ... x10
+        ]
+    }
+    Models with no reachable free feed (or no matching storm) return a
+    deterministic simulated track tagged source='mock'.
+    """
+    payload = request.get_json(silent=True) or {}
+    storm_name = str(payload.get('storm_name', 'UNNAMED')).upper()[:32]
+    track_history = payload.get('track_history') or []
+    if not track_history or len(track_history) < 2:
+        return jsonify({'error': 'track_history must contain >= 2 points.'}), 400
+
+    normalized = [{
+        'lat':        float(p.get('lat', 0)),
+        'lon':        float(p.get('lon', p.get('long', 130))),
+        'pressure':   float(p.get('pressure', 990)),
+        'wind_speed': float(p.get('wind_speed', p.get('windSpeed', 35))),
+    } for p in track_history]
+
+    try:
+        from scripts.multi_model_tracks import get_multi_model_tracks
+        result = get_multi_model_tracks(storm_name, normalized)
+    except Exception as exc:
+        import traceback
+        logger.error('Multi-model tracks error: %s\n%s', exc, traceback.format_exc())
+        return jsonify({'error': f'Multi-model aggregation failed: {exc}'}), 500
+
+    return jsonify(result)
+
+
 @app.route('/api/weather/fullgrid', methods=['GET'])
 def get_full_weather_grid():
     """
@@ -1339,6 +1389,175 @@ def get_marine_full_grid():
     marine_full_grid_cache.clear()
     marine_full_grid_cache[cache_key] = payload
     return jsonify(payload)
+
+
+@app.route('/api/forecast/chart', methods=['POST'])
+def forecast_chart():
+    """
+    Generate a 7-day forecast chart PNG for a live storm.
+
+    Request body (JSON):
+    {
+        "storm_name":    "CARINA",
+        "track_history": [{"lat":8.5,"lon":130.2,"pressure":998,"wind_speed":45}, ...]
+    }
+
+    Returns a PNG image of the forecast: track map + wind/pressure timeline.
+    """
+    import io
+    import math as _math
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
+    import numpy as np
+
+    payload = request.get_json(silent=True) or {}
+    storm_name    = str(payload.get('storm_name', 'UNNAMED')).upper()[:32]
+    track_history = payload.get('track_history', [])
+
+    if not track_history or len(track_history) < 2:
+        return jsonify({'error': 'track_history must have >= 2 points'}), 400
+
+    normalized = [
+        {
+            'lat':        float(p.get('lat', 0)),
+            'lon':        float(p.get('lon', p.get('long', 130))),
+            'pressure':   float(p.get('pressure', 990)),
+            'wind_speed': float(p.get('wind_speed', p.get('windSpeed', 35))),
+        }
+        for p in track_history
+    ]
+
+    try:
+        from scripts.ai_models import run_forecast
+        result = run_forecast(normalized)
+    except Exception as exc:
+        import traceback
+        logger.error('Chart forecast error: %s\n%s', exc, traceback.format_exc())
+        return jsonify({'error': f'Forecast failed: {exc}'}), 500
+
+    steps = result['forecast_steps']
+    if not steps:
+        return jsonify({'error': 'Forecast returned no steps'}), 500
+
+    # ── Build arrays ────────────────────────────────────────────
+    hist_lats = [p['lat'] for p in normalized]
+    hist_lons = [p['lon'] for p in normalized]
+
+    fc_hours  = [s['hour']       for s in steps]
+    fc_lats   = [s['lat']        for s in steps]
+    fc_lons   = [s['lon']        for s in steps]
+    fc_winds  = [s.get('wind_speed', normalized[-1]['wind_speed']) for s in steps]
+    fc_pres   = [s.get('pressure',   normalized[-1]['pressure'])   for s in steps]
+
+    # Category colours
+    CAT_COLORS_MAP = {0:'#87ceeb',1:'#00cc44',2:'#ffff00',3:'#ff9900',4:'#ff4400',5:'#cc00cc'}
+    def cat_from_kt(kt):
+        if kt < 34: return 0
+        if kt < 64: return 1
+        if kt < 96: return 2
+        if kt < 113: return 3
+        if kt < 137: return 4
+        return 5
+
+    # ── Figure ──────────────────────────────────────────────────
+    fig = plt.figure(figsize=(13, 6), facecolor='#0d1117')
+    gs  = gridspec.GridSpec(1, 2, width_ratios=[1.4, 1], wspace=0.06)
+
+    # ── Left panel: track map ───────────────────────────────────
+    ax_map = fig.add_subplot(gs[0], facecolor='#1a2744')
+
+    # Historical track
+    ax_map.plot(hist_lons, hist_lats, '-', color='#888888', linewidth=1.8,
+                label='Observed track', zorder=3)
+    ax_map.plot(hist_lons[-1], hist_lats[-1], 'o', color='white',
+                markersize=8, zorder=5)
+
+    # Forecast track — colour-coded by category
+    for i in range(len(fc_lats) - 1):
+        col = CAT_COLORS_MAP[cat_from_kt(fc_winds[i])]
+        ax_map.plot([fc_lons[i], fc_lons[i+1]], [fc_lats[i], fc_lats[i+1]],
+                    '-', color=col, linewidth=2.4, zorder=4)
+
+    # Day markers
+    for s in steps:
+        if s['hour'] > 0 and s['hour'] % 24 == 0:
+            d   = s['hour'] // 24
+            col = CAT_COLORS_MAP[cat_from_kt(s.get('wind_speed', fc_winds[-1]))]
+            ax_map.plot(s['lon'], s['lat'], 'o', color=col,
+                        markersize=14, markeredgecolor='white', markeredgewidth=1.5, zorder=6)
+            ax_map.text(s['lon'], s['lat'], str(d),
+                        ha='center', va='center', fontsize=7, color='white',
+                        fontweight='bold', zorder=7)
+
+    # Extents
+    all_lons = hist_lons + fc_lons
+    all_lats = hist_lats + fc_lats
+    pad = 3.0
+    ax_map.set_xlim(min(all_lons) - pad, max(all_lons) + pad)
+    ax_map.set_ylim(min(all_lats) - pad, max(all_lats) + pad)
+    ax_map.set_xlabel('Longitude', color='#aabbcc', fontsize=9)
+    ax_map.set_ylabel('Latitude',  color='#aabbcc', fontsize=9)
+    ax_map.tick_params(colors='#aabbcc', labelsize=8)
+    for spine in ax_map.spines.values():
+        spine.set_edgecolor('#2244aa')
+    ax_map.grid(True, linestyle='--', color='#2244aa', alpha=0.4)
+    ax_map.set_title(f'{storm_name} — 7-Day Forecast Track', color='white',
+                     fontsize=12, fontweight='bold', pad=8)
+
+    # Legend bar
+    for cat, col in CAT_COLORS_MAP.items():
+        ax_map.plot([], [], 's', color=col, markersize=8,
+                    label=f'Cat {cat}' if cat > 0 else 'TD/TS')
+    ax_map.legend(loc='lower left', fontsize=7, framealpha=0.3,
+                  labelcolor='white', facecolor='#0d1117')
+
+    # ── Right panel: wind + pressure timeline ───────────────────
+    ax_w = fig.add_subplot(gs[1], facecolor='#1a2744')
+    ax_p = ax_w.twinx()
+
+    ax_w.fill_between(fc_hours, fc_winds, alpha=0.25, color='#00ccff')
+    ax_w.plot(fc_hours, fc_winds, '-', color='#00ccff', linewidth=2.2, label='Wind (kt)')
+    ax_p.plot(fc_hours, fc_pres,  '--', color='#ff9944', linewidth=1.8, label='Pressure (hPa)')
+
+    # Day tick lines
+    for d in range(1, 8):
+        ax_w.axvline(d * 24, color='#2244aa', linewidth=0.8, linestyle=':')
+        ax_w.text(d * 24, ax_w.get_ylim()[0] if ax_w.get_ylim()[0] != 0 else min(fc_winds) * 0.95,
+                  f'D{d}', ha='center', va='bottom', fontsize=7, color='#6688aa')
+
+    ax_w.set_xlabel('Forecast hour', color='#aabbcc', fontsize=9)
+    ax_w.set_ylabel('Wind speed (kt)', color='#00ccff', fontsize=9)
+    ax_p.set_ylabel('Pressure (hPa)',  color='#ff9944', fontsize=9)
+    ax_w.tick_params(colors='#aabbcc', labelsize=8)
+    ax_p.tick_params(colors='#ff9944', labelsize=8)
+    for spine in ax_w.spines.values():
+        spine.set_edgecolor('#2244aa')
+    ax_w.set_xlim(0, 168)
+    ax_w.set_title('Wind & Pressure (168h)', color='white', fontsize=11, fontweight='bold', pad=8)
+
+    lines1, labels1 = ax_w.get_legend_handles_labels()
+    lines2, labels2 = ax_p.get_legend_handles_labels()
+    ax_w.legend(lines1 + lines2, labels1 + labels2, loc='upper right',
+                fontsize=8, framealpha=0.3, labelcolor='white', facecolor='#0d1117')
+
+    # ── Footer ──────────────────────────────────────────────────
+    generated = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+    fig.text(0.5, 0.01, f'Generated: {generated}  |  Method: {result.get("method","physics")}  |  Heads Up',
+             ha='center', va='bottom', color='#556677', fontsize=8)
+
+    plt.tight_layout(rect=[0, 0.03, 1, 1])
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor=fig.get_facecolor())
+    plt.close(fig)
+    buf.seek(0)
+
+    safe_name = ''.join(c if c.isalnum() or c in '-_' else '_' for c in storm_name)
+    filename  = f'{safe_name}_7day_forecast.png'
+    return send_file(buf, mimetype='image/png',
+                     as_attachment=True, download_name=filename)
 
 
 if __name__ == '__main__':

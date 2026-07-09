@@ -4,6 +4,8 @@ import React, {
   type ReactNode, type Dispatch,
 } from 'react'
 import type { DashboardState, DashboardAction, LayerType, MapTheme, Storm, ForecastStep, GridPoint, WindGrid, SeasonalOutlook, HoverInfo } from '@/lib/types'
+import type { ForecastModelId } from '@/lib/forecastModels'
+import { ALL_MODEL_IDS } from '@/lib/forecastModels'
 import { generateWeatherGrid, generateWindGrid } from '@/lib/mockData'
 
 // ── Initial state ─────────────────────────────────────────
@@ -21,6 +23,7 @@ const initialState: DashboardState = {
   windGrid: generateWindGrid(0),
   seasonalData: null,
   hoverInfo: null,
+  enabledModels: [...ALL_MODEL_IDS],
 }
 
 // ── Reducer ───────────────────────────────────────────────
@@ -61,6 +64,15 @@ function reducer(state: DashboardState, action: DashboardAction): DashboardState
       return { ...state, hoverInfo: action.info }
     case 'CLEAR_HOVER':
       return { ...state, hoverInfo: null }
+    case 'TOGGLE_MODEL':
+      return {
+        ...state,
+        enabledModels: state.enabledModels.includes(action.model)
+          ? state.enabledModels.filter(m => m !== action.model)
+          : [...state.enabledModels, action.model],
+      }
+    case 'SET_ENABLED_MODELS':
+      return { ...state, enabledModels: action.models }
     default:
       return state
   }
@@ -81,6 +93,8 @@ type ContextValue = {
   setSeasonalData:(d: SeasonalOutlook|null)=> void
   setHover:       (info: HoverInfo)        => void
   clearHover:     ()                       => void
+  toggleModel:    (m: ForecastModelId)     => void
+  setEnabledModels:(ms: ForecastModelId[]) => void
 }
 
 const DashboardContext = createContext<ContextValue | null>(null)
@@ -99,6 +113,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const setSeasonalData = useCallback((data: SeasonalOutlook|null) => dispatch({ type:'SET_SEASONAL_DATA', data }), [])
   const setHover        = useCallback((info: HoverInfo)        => dispatch({ type:'SET_HOVER', info }), [])
   const clearHover      = useCallback(()                       => dispatch({ type:'CLEAR_HOVER' }), [])
+  const toggleModel     = useCallback((model: ForecastModelId) => dispatch({ type:'TOGGLE_MODEL', model }), [])
+  const setEnabledModels= useCallback((models: ForecastModelId[]) => dispatch({ type:'SET_ENABLED_MODELS', models }), [])
 
   return (
     <DashboardContext.Provider value={{
@@ -106,6 +122,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       setLayer, setMapTheme, setForecastHour, setPlaying,
       setActiveStorm, setForecastSteps, setGridPoints, setWindGrid,
       setSeasonalData, setHover, clearHover,
+      toggleModel, setEnabledModels,
     }}>
       {children}
     </DashboardContext.Provider>
