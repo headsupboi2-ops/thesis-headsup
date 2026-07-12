@@ -1,0 +1,28 @@
+# ── Dependencies ─────────────────────────────
+node_modules/
+**/node_modules/
+
+# ── Python ───────────────────────────────────
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# ── Next.js / frontend build ─────────────────
+.next/
+**/.next/
+*.tsbuildinfo
+
+# ── Expo / mobile build ──────────────────────
+.expo/
+**/.expo/
+dist/
+**/dist/
+
+# ── Generated backtest artifacts (bulky) ─────
+backend/results/storm_predictions/
+
+# ── OS ───────────────────────────────────────
+.DS_Store
+Thumbs.db

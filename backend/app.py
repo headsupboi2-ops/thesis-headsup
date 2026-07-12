@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, request, send_file
 from flask_cors import CORS
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import sys
 import threading
@@ -47,6 +47,29 @@ def _wind_to_cat(kt):
     return 5
 
 
+def _storm_freshness(storm, now):
+    """
+    Classify how current a storm's position is, and its age in hours.
+
+    data_kind → freshness:
+      'analysis'   → 'live'     (official current-analysis nowcast: JMA/PAGASA/JTWC)
+      'best_track' → 'delayed'  (observed best-track archive — can lag many hours)
+      'historical' → 'archive'  (local historical fallback — not a current storm)
+    Returns (freshness, age_hours|None).
+    """
+    kind = storm.get('data_kind', 'analysis')
+    obs = storm.get('observed_at')
+    age_h = None
+    if obs:
+        try:
+            dt = datetime.fromisoformat(str(obs).replace('Z', '+00:00'))
+            age_h = round((now - dt).total_seconds() / 3600.0, 1)
+        except Exception:
+            age_h = None
+    fresh = {'historical': 'archive', 'best_track': 'delayed'}.get(kind, 'live')
+    return fresh, age_h
+
+
 def _estimate_vel(path_pts, n=6):
     pts = path_pts[-max(2, min(n, len(path_pts))):]
     if len(pts) < 2:
@@ -67,48 +90,71 @@ def _fetch_live_storms():
     Each dict: {name, lat, lon, pressure, wind_speed, category, source, path}
     where path is [{lat, lon, pressure, wind_speed}] usable as run_forecast input.
     """
-    # 0. JMA RSMC Tokyo — authoritative WP source, same data Windy.com uses
+    # 0. JMA RSMC Tokyo — authoritative WP source, same current analysis Windy uses.
+    #    Bosai API (2024+ layout): targetTc.json lists active TC ids; per-TC
+    #    specifications.json gives the current analysis position/intensity, and
+    #    forecast.json gives the observed track. (The old single
+    #    current_information.json endpoint was retired and now 404s.)
     try:
-        _jma_r = requests.get(
-            'https://www.jma.go.jp/bosai/typhoon/data/current_information.json',
-            timeout=10, headers={'User-Agent': 'StormForecastingApp/1.0'}
-        )
-        _jma_r.raise_for_status()
-        _jma = _jma_r.json()
+        _HDRS = {'User-Agent': 'StormForecastingApp/1.0'}
+        _JMA = 'https://www.jma.go.jp/bosai/typhoon/data'
+        _tgt = requests.get(f'{_JMA}/targetTc.json', timeout=10, headers=_HDRS)
+        _tgt.raise_for_status()
         _jma_storms = []
-        # JMA returns a list of active TC objects
-        _tc_list = _jma if isinstance(_jma, list) else _jma.get('TyphoonList', _jma.get('cyclones', []))
-        for _tc in _tc_list:
+        for _tc in (_tgt.json() or []):
+            _tid = _tc.get('tropicalCyclone')
+            if not _tid:
+                continue
             try:
-                _name = str(_tc.get('name', _tc.get('Name', 'UNNAMED'))).upper().strip() or 'UNNAMED'
-                # Current analysis position
-                _anal = _tc.get('AnalysisInfo', _tc.get('analysis', _tc))
-                _lat = float(_anal.get('lat', _anal.get('Lat', _tc.get('lat', 0))))
-                _lon = float(_anal.get('lon', _anal.get('Lon', _tc.get('lon', 0))))
-                if not (0 <= _lat <= 50 and 90 <= _lon <= 185): continue
-                _wind = float(_anal.get('wind', _anal.get('Wind', _tc.get('wind', 35))))
-                _pres = float(_anal.get('pressure', _anal.get('Pressure', _tc.get('pressure', 990))))
-                # Build path from track if available
-                _track = _tc.get('TrackList', _tc.get('track', []))
-                _path = []
-                for _pt in _track:
-                    try:
-                        _path.append({
-                            'lat': float(_pt.get('lat', _pt.get('Lat', _lat))),
-                            'lon': float(_pt.get('lon', _pt.get('Lon', _lon))),
-                            'pressure': float(_pt.get('pressure', _pt.get('Pressure', _pres))),
-                            'wind_speed': float(_pt.get('wind', _pt.get('Wind', _wind))),
-                        })
-                    except Exception: continue
-                if not _path:
-                    _path = [{'lat': _lat, 'lon': _lon, 'pressure': _pres, 'wind_speed': _wind}]
-                _jma_storms.append({
-                    'name': _name, 'lat': _lat, 'lon': _lon,
-                    'pressure': _pres, 'wind_speed': _wind,
-                    'category': _wind_to_cat(_wind), 'source': 'JMA RSMC',
-                    'velocity': _estimate_vel(_path), 'path': _path,
-                })
-            except Exception: continue
+                _spec = requests.get(f'{_JMA}/{_tid}/specifications.json', timeout=10, headers=_HDRS).json()
+            except Exception:
+                continue
+            # Pull the name (title part) and the advancedHours==0 "Analysis" part.
+            _name, _anal = 'UNNAMED', None
+            for _part in _spec:
+                _nm = _part.get('name')
+                if isinstance(_nm, dict) and _nm.get('en'):
+                    _name = str(_nm['en']).upper().strip()
+                if _part.get('advancedHours') == 0 and isinstance(_part.get('position'), dict):
+                    _anal = _part
+            if not _anal:
+                continue
+            _pos = _anal.get('position', {}).get('deg')  # [lat, lon]
+            if not (isinstance(_pos, list) and len(_pos) == 2):
+                continue
+            _lat, _lon = float(_pos[0]), float(_pos[1])
+            if not (0 <= _lat <= 50 and 90 <= _lon <= 185):
+                continue
+            _wind = float((_anal.get('maximumWind', {}) or {}).get('sustained', {}).get('kt', 35) or 35)
+            _pres = float(_anal.get('pressure', 990) or 990)
+            _obs = (_anal.get('validtime', {}) or {}).get('UTC')  # true observation time
+            # Observed track from forecast.json (advancedHours==0 → track.preTyphoon + track.typhoon).
+            _path = []
+            try:
+                _fc = requests.get(f'{_JMA}/{_tid}/forecast.json', timeout=10, headers=_HDRS).json()
+                for _part in _fc:
+                    if _part.get('advancedHours') != 0:
+                        continue
+                    _trk = _part.get('track', {}) or {}
+                    for _seg in ('preTyphoon', 'typhoon'):
+                        for _pt in (_trk.get(_seg) or []):
+                            if not (isinstance(_pt, list) and len(_pt) == 2):
+                                continue
+                            _plat, _plon = float(_pt[0]), float(_pt[1])
+                            if _path and _path[-1]['lat'] == _plat and _path[-1]['lon'] == _plon:
+                                continue  # dedupe the shared preTyphoon/typhoon join point
+                            _path.append({'lat': _plat, 'lon': _plon, 'pressure': _pres, 'wind_speed': _wind})
+            except Exception:
+                pass
+            if not _path:
+                _path = [{'lat': _lat, 'lon': _lon, 'pressure': _pres, 'wind_speed': _wind}]
+            _jma_storms.append({
+                'name': _name, 'lat': _lat, 'lon': _lon,
+                'pressure': _pres, 'wind_speed': _wind,
+                'category': _wind_to_cat(_wind), 'source': 'JMA RSMC Tokyo',
+                'data_kind': 'analysis', 'observed_at': _obs,
+                'velocity': _estimate_vel(_path), 'path': _path,
+            })
         if _jma_storms:
             return _jma_storms
     except Exception as _ex:
@@ -136,6 +182,7 @@ def _fetch_live_storms():
                     'name': name, 'lat': lat, 'lon': lon,
                     'pressure': pres, 'wind_speed': wind,
                     'category': _wind_to_cat(wind), 'source': 'PAGASA',
+                    'data_kind': 'analysis', 'observed_at': None,
                     'velocity': {'vLat': 0.04, 'vLon': -0.07},
                     'path': [{'lat': lat, 'lon': lon, 'pressure': pres, 'wind_speed': wind}],
                 })
@@ -180,6 +227,7 @@ def _fetch_live_storms():
                         'name': name, 'lat': lat, 'lon': lon,
                         'pressure': float(pres), 'wind_speed': float(wind),
                         'category': _wind_to_cat(wind), 'source': 'JTWC',
+                        'data_kind': 'analysis', 'observed_at': None,
                         'velocity': {'vLat': 0.04, 'vLon': -0.07},
                         'path': [{'lat': lat, 'lon': lon,
                                   'pressure': float(pres), 'wind_speed': float(wind)}],
@@ -205,6 +253,7 @@ def _fetch_live_storms():
         if len(_lines) >= 3:
             _reader = _csv.DictReader(_io.StringIO('\n'.join([_lines[0]] + _lines[2:])))
             _by_storm = {}
+            _time_by_storm = {}
             for _row in _reader:
                 if _row.get('BASIN', '').strip() != 'WP':
                     continue
@@ -219,16 +268,23 @@ def _fetch_live_storms():
                 _pres = float(_pres_raw) if _pres_raw else 990.0
                 _by_storm.setdefault(_name, []).append(
                     {'lat': _lat, 'lon': _lon, 'pressure': _pres, 'wind_speed': _wind})
+                _iso = _row.get('ISO_TIME', '').strip()
+                if _iso:
+                    _time_by_storm[_name] = _iso  # last row wins → most recent fix time
             _storms = []
             for _name, _path in _by_storm.items():
                 if not _path: continue
                 _last = _path[-1]
+                _obs = _time_by_storm.get(_name)
                 _storms.append({
                     'name': _name,
                     'lat': _last['lat'], 'lon': _last['lon'],
                     'pressure': _last['pressure'], 'wind_speed': _last['wind_speed'],
                     'category': _wind_to_cat(_last['wind_speed']),
-                    'source': 'IBTrACS ACTIVE (live)',
+                    'source': 'IBTrACS best track',
+                    # Best-track is observed history, not a live nowcast — it can lag.
+                    'data_kind': 'best_track',
+                    'observed_at': (_obs.replace(' ', 'T') + 'Z') if _obs else None,
                     'velocity': _estimate_vel(_path),
                     'path': _path,
                 })
@@ -267,7 +323,8 @@ def _fetch_live_storms():
                 'pressure':   float(last.get('pressure', 990)),
                 'wind_speed': float(last.get('speed', last.get('wind_speed', 35))),
                 'category': _wind_to_cat(float(last.get('speed', last.get('wind_speed', 35)))),
-                'source': f'IBTrACS {y}',
+                'source': f'Archive {y}',
+                'data_kind': 'historical', 'observed_at': None,
                 'velocity': _estimate_vel(s['path']),
                 'path': norm,
             })
@@ -819,11 +876,26 @@ def get_realtime_storms():
     storms = cached.get('storms', [])
     source = cached.get('source', 'loading')
     fetched_at = cached.get('fetched_at')
+
+    # Stamp each storm with its data freshness + age, computed at request time
+    # (so age stays current even between the 10-min cache refreshes). The
+    # top-level `freshness` is the most-current tier present, for a global badge.
+    now = datetime.now(timezone.utc)
+    rank = {'live': 3, 'delayed': 2, 'archive': 1, 'none': 0}
+    top = 'none'
+    enriched = []
+    for s in storms:
+        fresh, age_h = _storm_freshness(s, now)
+        enriched.append({**s, 'freshness': fresh, 'age_hours': age_h})
+        if rank[fresh] > rank[top]:
+            top = fresh
+
     return jsonify({
         'status': 'success',
         'source': source,
-        'count': len(storms),
-        'storms': storms,
+        'freshness': top,
+        'count': len(enriched),
+        'storms': enriched,
         'generated_at': fetched_at.strftime('%Y-%m-%dT%H:%M:%SZ') if fetched_at else None,
     })
 
@@ -1558,6 +1630,101 @@ def forecast_chart():
     filename  = f'{safe_name}_7day_forecast.png'
     return send_file(buf, mimetype='image/png',
                      as_attachment=True, download_name=filename)
+
+
+_model_perf_cache = {'data': None, 'mtime': None}
+
+
+def _parse_backtest_summary(text):
+    """
+    Parse the sklearn classification-report table out of backtest_summary.txt
+    into a list of {label, precision, recall, f1, support}. Handles multi-word
+    labels ('SevTY-3') and the trailing macro/weighted-avg rows.
+    """
+    per_class = []
+    # Rows look like:  "          TD       0.93      0.95      0.94       671"
+    # or:             "   macro avg       0.84      0.79      0.80      3525"
+    row_re = _re.compile(
+        r'^\s*([A-Za-z][A-Za-z0-9 \-]*?)\s+'
+        r'(\d\.\d{2})\s+(\d\.\d{2})\s+(\d\.\d{2})\s+(\d+)\s*$'
+    )
+    for line in text.splitlines():
+        if 'accuracy' in line.lower():
+            continue  # accuracy row has only 2 numbers — skip
+        m = row_re.match(line)
+        if not m:
+            continue
+        per_class.append({
+            'label':     m.group(1).strip(),
+            'precision': float(m.group(2)),
+            'recall':    float(m.group(3)),
+            'f1':        float(m.group(4)),
+            'support':   int(m.group(5)),
+        })
+    return per_class
+
+
+@app.route('/api/analytics/model-performance', methods=['GET'])
+def analytics_model_performance():
+    """
+    Serve the real offline-backtest metrics for the predictive-analytics report.
+
+    Reads backend/results/backtest_metrics.json (track error, skill, accuracy)
+    and parses backend/results/backtest_summary.txt for the per-class
+    precision/recall/f1/support table. Cached until the metrics file changes.
+
+    404 if the backtest has never been run (results files absent).
+    """
+    metrics_fp = get_resource_path('results/backtest_metrics.json')
+    summary_fp = get_resource_path('results/backtest_summary.txt')
+    if not os.path.exists(metrics_fp):
+        return jsonify({'error': 'No backtest metrics found — run scripts/backtest.py first.'}), 404
+
+    mtime = os.path.getmtime(metrics_fp)
+    if _model_perf_cache['data'] is not None and _model_perf_cache['mtime'] == mtime:
+        return jsonify(_model_perf_cache['data'])
+
+    try:
+        with open(metrics_fp) as f:
+            metrics = json.load(f)
+    except Exception as exc:
+        logger.error('Failed to read backtest metrics: %s', exc)
+        return jsonify({'error': f'Could not read metrics: {exc}'}), 500
+
+    per_class = []
+    if os.path.exists(summary_fp):
+        try:
+            with open(summary_fp, encoding='utf-8') as f:
+                per_class = _parse_backtest_summary(f.read())
+        except Exception as exc:
+            logger.warning('Failed to parse backtest summary: %s', exc)
+
+    # Confusion-matrix raw counts are not stored in JSON/text — only the PNG.
+    # The frontend renders it from /api/analytics/plot/confusion_matrix.
+    plots = {}
+    for name in ('confusion_matrix', 'track_error_plot'):
+        if os.path.exists(get_resource_path(f'results/{name}.png')):
+            plots[name] = f'/api/analytics/plot/{name}'
+
+    payload = {
+        **metrics,
+        'per_class':    per_class,
+        'plots':        plots,
+        'generated_at': datetime.utcfromtimestamp(mtime).strftime('%Y-%m-%dT%H:%M:%SZ'),
+    }
+    _model_perf_cache.update(data=payload, mtime=mtime)
+    return jsonify(payload)
+
+
+@app.route('/api/analytics/plot/<name>', methods=['GET'])
+def analytics_plot(name):
+    """Serve a real backtest diagnostic PNG (confusion matrix / track-error plot)."""
+    if name not in ('confusion_matrix', 'track_error_plot'):
+        return jsonify({'error': 'Unknown plot'}), 404
+    fp = get_resource_path(f'results/{name}.png')
+    if not os.path.exists(fp):
+        return jsonify({'error': 'Plot not found'}), 404
+    return send_file(fp, mimetype='image/png')
 
 
 if __name__ == '__main__':

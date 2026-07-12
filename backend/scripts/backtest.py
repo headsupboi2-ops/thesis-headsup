@@ -452,6 +452,81 @@ def plot_track_errors(results_ml, results_phys):
     print(f"  Saved: {out}")
 
 
+def plot_storm_prediction(storm, lstm_model, mode_label, out_dir):
+    """
+    Save a map image showing the seed track, predicted 7-day path,
+    and actual 7-day path for a single storm.
+    """
+    lats, lons, winds, pressures, classes = path_to_arrays(storm)
+    n_pts = len(lats)
+    seed_steps = SEED_HOURS // STEP_H
+
+    if n_pts <= seed_steps + 1:
+        return
+
+    seed_lat  = lats[:seed_steps]
+    seed_lon  = lons[:seed_steps]
+    seed_wind = winds[:seed_steps]
+    seed_pres = pressures[:seed_steps]
+
+    max_steps = min(n_pts - seed_steps, 168 // STEP_H)
+    if max_steps < 2:
+        return
+
+    if lstm_model is not None and mode_label == "LSTM":
+        try:
+            pred_lats, pred_lons = lstm_forecast(
+                lstm_model, seed_lat, seed_lon, seed_wind, seed_pres, max_steps)
+        except Exception:
+            pred_lats, pred_lons = physics_forecast(seed_lat, seed_lon, max_steps)
+    else:
+        pred_lats, pred_lons = physics_forecast(seed_lat, seed_lon, max_steps)
+
+    actual_lats = lats[seed_steps: seed_steps + max_steps]
+    actual_lons = lons[seed_steps: seed_steps + max_steps]
+
+    name = storm.get("name", "UNNAMED").upper()
+    year = storm.get("year", "")
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+    ax.set_facecolor("#cce5f6")
+
+    ax.plot(seed_lon, seed_lat, "o-", color="#1a6faf", linewidth=1.8,
+            markersize=3, label=f"Seed track (first {SEED_HOURS}h)", zorder=3)
+    ax.plot(pred_lons[:len(actual_lons)], pred_lats[:len(actual_lats)],
+            "--", color="#e63946", linewidth=2.0, label="Predicted (7-day)", zorder=4)
+    ax.plot(actual_lons, actual_lats, "-", color="#2dc653", linewidth=2.0,
+            label="Actual (7-day)", zorder=4)
+
+    ax.plot(seed_lon[-1], seed_lat[-1], "s", color="#1a6faf", markersize=7, zorder=5)
+    if len(pred_lons):
+        ax.plot(pred_lons[len(actual_lons)-1], pred_lats[len(actual_lats)-1],
+                "x", color="#e63946", markersize=9, markeredgewidth=2, zorder=5)
+    if len(actual_lons):
+        ax.plot(actual_lons[-1], actual_lats[-1],
+                "*", color="#2dc653", markersize=12, zorder=5)
+
+    hours_shown = max_steps * STEP_H
+    ax.set_title(f"{name} ({year}) — 7-Day Forecast vs Actual\n"
+                 f"Lead: {hours_shown}h  |  Mode: {mode_label}", fontsize=11)
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.legend(loc="best", fontsize=8)
+    ax.grid(True, linestyle="--", alpha=0.4)
+
+    all_lons = np.concatenate([seed_lon, pred_lons[:max_steps], actual_lons])
+    all_lats = np.concatenate([seed_lat, pred_lats[:max_steps], actual_lats])
+    pad = 3.0
+    ax.set_xlim(all_lons.min() - pad, all_lons.max() + pad)
+    ax.set_ylim(all_lats.min() - pad, all_lats.max() + pad)
+
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in f"{name}_{year}")
+    out_path = os.path.join(out_dir, f"{safe_name}.png")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=130, bbox_inches="tight")
+    plt.close()
+
+
 def plot_confusion_matrix(y_true, y_pred):
     """Heatmap confusion matrix for intensity classification."""
     try:
@@ -592,6 +667,16 @@ def main():
         plot_track_errors(results_ml, results_phys)
     if y_true is not None and y_pred is not None:
         plot_confusion_matrix(y_true, y_pred)
+
+    # Per-storm 7-day prediction images
+    pred_dir = os.path.join(RESULT_DIR, "storm_predictions")
+    os.makedirs(pred_dir, exist_ok=True)
+    print(f"\n[6b] Saving individual 7-day prediction plots -> {pred_dir}")
+    for i, storm in enumerate(test_storms):
+        plot_storm_prediction(storm, lstm_model, mode_label, pred_dir)
+        if (i + 1) % 10 == 0:
+            print(f"  Plotted {i+1}/{len(test_storms)} storms...")
+    print(f"  Done — {len(test_storms)} prediction images saved.")
 
     # 8. Build summary
     print("\n[7] Writing results...")

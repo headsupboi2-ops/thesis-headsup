@@ -110,41 +110,53 @@ def normalize_model_track(points, model_id, source):
 
 # ── Real-feed adapters (each returns points list or None) ───────────────────
 def _fetch_jma(storm_name):
-    """JMA bosai typhoon JSON — forecast positions when present."""
-    r = requests.get('https://www.jma.go.jp/bosai/typhoon/data/current_information.json',
-                     timeout=10, headers=HDRS)
-    r.raise_for_status()
-    data = r.json()
-    tc_list = data if isinstance(data, list) else data.get('TyphoonList', data.get('cyclones', []))
-    for tc in tc_list:
-        name = str(tc.get('name', tc.get('Name', ''))).upper().strip()
+    """
+    JMA bosai typhoon forecast track (2024+ API):
+      targetTc.json (active TC ids) → {id}/specifications.json (name match)
+      → {id}/forecast.json, whose parts carry `advancedHours` (lead hour) and
+      a `center` [lat, lon] forecast position. hour 0 is the observed track's
+      last point. (The old current_information.json endpoint now 404s.)
+    """
+    base = 'https://www.jma.go.jp/bosai/typhoon/data'
+    tgt = requests.get(f'{base}/targetTc.json', timeout=10, headers=HDRS)
+    tgt.raise_for_status()
+    for tc in (tgt.json() or []):
+        tid = tc.get('tropicalCyclone')
+        if not tid:
+            continue
+        try:
+            spec = requests.get(f'{base}/{tid}/specifications.json', timeout=10, headers=HDRS).json()
+        except Exception:
+            continue
+        name = ''
+        for part in spec:
+            nm = part.get('name') if isinstance(part, dict) else None
+            if isinstance(nm, dict) and nm.get('en'):
+                name = str(nm['en']).upper().strip()
+                break
         if name != storm_name.upper():
             continue
-        for key in ('ForecastInfo', 'forecast', 'ForecastList', 'forecasts', 'forecastPoints'):
-            fc = tc.get(key)
-            if not isinstance(fc, list):
+        try:
+            fc = requests.get(f'{base}/{tid}/forecast.json', timeout=10, headers=HDRS).json()
+        except Exception:
+            return None
+        pts = []
+        for part in fc:
+            if not isinstance(part, dict):
                 continue
-            pts = []
-            for f in fc:
-                if not isinstance(f, dict):
-                    continue
-                try:
-                    lat = float(f.get('lat', f.get('Lat')))
-                    lon = float(f.get('lon', f.get('Lon')))
-                except (TypeError, ValueError):
-                    continue
-                hour = f.get('tau', f.get('hour'))
-                if hour is None:
-                    dt = _parse_time_guess(f.get('validtime', f.get('ValidTime', '')))
-                    hour = _hours_from_now(dt) if dt else None
-                if hour is None:
-                    continue
-                wind = f.get('wind', f.get('Wind'))
-                pts.append({'lat': lat, 'lon': lon, 'hour': int(hour),
-                            'wind_kt': float(wind) if wind is not None else None})
-            cleaned = _clean_points(pts)
-            if cleaned:
-                return cleaned
+            ah = part.get('advancedHours')
+            if ah is None:
+                continue
+            if ah == 0:
+                trk = part.get('track', {}) or {}
+                seq = trk.get('typhoon') or trk.get('preTyphoon') or []
+                if seq and isinstance(seq[-1], list) and len(seq[-1]) == 2:
+                    pts.append({'lat': float(seq[-1][0]), 'lon': float(seq[-1][1]), 'hour': 0, 'wind_kt': None})
+                continue
+            center = part.get('center')
+            if isinstance(center, list) and len(center) == 2:
+                pts.append({'lat': float(center[0]), 'lon': float(center[1]), 'hour': int(ah), 'wind_kt': None})
+        return _clean_points(pts)
     return None
 
 

@@ -87,7 +87,7 @@
     "168": 0.0
   },
   "classification": {
-    "accuracy": 0.8956,
-    "macro_f1": 0.7932
+    "accuracy": 0.9001,
+    "macro_f1": 0.801
   }
 }

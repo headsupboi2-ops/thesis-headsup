@@ -18,6 +18,8 @@ interface LiveStorm {
   pressure?: number
   category: number
   path: StormPoint[]
+  freshness?: 'live' | 'delayed' | 'archive' | 'none'
+  age_hours?: number | null
 }
 interface ForecastStep { lat: number; lon: number; hour: number; wind_speed?: number }
 interface TrackedStorm {
@@ -85,6 +87,7 @@ export function HurricaneTracker() {
   const [storms, setStorms] = useState<TrackedStorm[]>([])
   const [fetchStatus, setFetchStatus] = useState<'idle'|'loading'|'ok'|'empty'|'error'>('idle')
   const [stormCount, setStormCount] = useState(0)
+  const [dataFreshness, setDataFreshness] = useState<{ level: string; ageH: number | null }>({ level: 'live', ageH: null })
 
   const tracksRef  = useRef<import('leaflet').Layer[]>([])  // historical + forecast lines
   const markersRef = useRef<import('leaflet').Layer[]>([])  // animated position circle + label
@@ -127,6 +130,9 @@ export function HurricaneTracker() {
 
         setFetchStatus('ok')
         setStormCount(data.length)
+        // Surface honest data freshness — never imply "live" for lagged best-track.
+        const ages = data.map(s => s.age_hours).filter((a): a is number => typeof a === 'number')
+        setDataFreshness({ level: json.freshness ?? 'live', ageH: ages.length ? Math.max(...ages) : null })
         // Phase-1 quick render only on the first load — on 10-min refreshes,
         // keep the existing forecasts on screen until Phase 2 replaces them.
         if (!cancelled) setStorms(prev => prev.length ? prev : data.map(storm => ({ info: storm, forecast: [] })))
@@ -482,11 +488,16 @@ export function HurricaneTracker() {
 
   if (!active) return null
 
+  const stale = fetchStatus === 'ok' && dataFreshness.level !== 'live'
+  const freshnessNote =
+    dataFreshness.level === 'delayed'
+      ? ` · best track${dataFreshness.ageH != null ? ` ${Math.round(dataFreshness.ageH)}h old` : ''}`
+      : dataFreshness.level === 'archive' ? ' · archive (no live feed)' : ''
   const statusMsg =
     fetchStatus === 'loading' ? 'Fetching storm data…' :
     fetchStatus === 'empty'   ? 'No active storms — retrying…' :
     fetchStatus === 'error'   ? 'Cannot reach backend — retrying…' :
-    fetchStatus === 'ok'      ? `${stormCount} storm${stormCount !== 1 ? 's' : ''} tracked` :
+    fetchStatus === 'ok'      ? `${stormCount} storm${stormCount !== 1 ? 's' : ''} tracked${freshnessNote}` :
     null
 
   const isForecasting = forecastHour > 0 && storms.some(s => s.forecast.length > 0)
@@ -498,7 +509,7 @@ export function HurricaneTracker() {
         <div className="fixed z-[850] flex items-center gap-2 px-3 py-1.5 text-white text-xs font-semibold"
           style={{
             top: 58, left: '50%', transform: 'translateX(-50%)',
-            background: fetchStatus === 'error' ? '#882200' : fetchStatus === 'ok' ? '#1a5c2a' : '#1a3acc',
+            background: fetchStatus === 'error' ? '#882200' : stale ? '#8a5a00' : fetchStatus === 'ok' ? '#1a5c2a' : '#1a3acc',
             borderRadius: 6, boxShadow: '0 2px 10px rgba(0,0,0,0.35)',
           }}>
           {statusMsg}
