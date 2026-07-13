@@ -1,12 +1,18 @@
 import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { Platform } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../lib/theme'
 import { StormDataProvider } from '../../hooks/useStormData'
+import { LocationProvider } from '../../hooks/useLocation'
 
 export default function TabsLayout() {
+  // Add the device's bottom inset so the tab bar clears the Android
+  // navigation buttons (or the iOS home indicator) instead of sitting under them.
+  const insets = useSafeAreaInsets()
+  const bottomInset = Math.max(insets.bottom, 8)
   return (
     <StormDataProvider>
+    <LocationProvider>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -16,9 +22,9 @@ export default function TabsLayout() {
           backgroundColor: colors.bgElevated,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 86 : 64,
-          paddingTop: 6,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          height: 58 + bottomInset,
+          paddingTop: 8,
+          paddingBottom: bottomInset,
         },
         tabBarLabelStyle: { fontSize: 10.5, fontWeight: '700' },
       }}
@@ -38,6 +44,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="my-area"
+        options={{
+          title: 'My Area',
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="alerts"
         options={{
           title: 'Alerts',
@@ -52,6 +65,7 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    </LocationProvider>
     </StormDataProvider>
   )
 }

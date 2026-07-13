@@ -15,6 +15,9 @@ interface Props {
   layer?: WeatherLayer | null       // active weather overlay, or null for none
   forecastHour: number              // 0..168
   basemap: BasemapId
+  focusStorm?: string               // storm name to fly the map to
+  focusKey?: string                 // nonce so re-tapping the same storm re-focuses
+  parKey?: string                   // nonce: bump to fit the map to the PAR region
 }
 
 /**
@@ -26,6 +29,7 @@ interface Props {
  */
 export function LeafletMap({
   storms, forecasts, spaghetti, weatherGrid, marineGrid, layer, forecastHour, basemap,
+  focusStorm, focusKey, parKey,
 }: Props) {
   const ref = useRef<WebView>(null)
   const ready = useRef(false)
@@ -52,7 +56,9 @@ export function LeafletMap({
     inject(`HU.setHour(${forecastHour})`)
     inject(`HU.setStorms(${stormsPayload()})`)
     inject(`HU.setSpaghetti(${spaghettiPayload()})`)
-    inject(`HU.fit()`)
+    // Focus the tapped storm if one was requested; otherwise fit all storms.
+    if (focusStorm) inject(`HU.focus(${JSON.stringify(focusStorm)})`)
+    else inject(`HU.fit()`)
   }
 
   // Incremental updates once the map is ready.
@@ -60,8 +66,12 @@ export function LeafletMap({
   useEffect(() => { if (ready.current) inject(`HU.setWeather(${weatherPayload()})`) }, [weatherGrid, marineGrid])
   useEffect(() => { if (ready.current) inject(`HU.setLayer(${layerPayload()})`) }, [layer])
   useEffect(() => { if (ready.current) inject(`HU.setHour(${forecastHour})`) }, [forecastHour])
-  useEffect(() => { if (ready.current) { inject(`HU.setStorms(${stormsPayload()})`); inject(`HU.fit()`) } }, [storms, forecasts])
+  useEffect(() => { if (ready.current) { inject(`HU.setStorms(${stormsPayload()})`); if (!focusStorm) inject(`HU.fit()`) } }, [storms, forecasts])
   useEffect(() => { if (ready.current) inject(`HU.setSpaghetti(${spaghettiPayload()})`) }, [spaghetti])
+  // Fly to a storm when tapped from the Storms tab (focusKey nonce re-triggers).
+  useEffect(() => { if (ready.current && focusStorm) inject(`HU.focus(${JSON.stringify(focusStorm)})`) }, [focusStorm, focusKey])
+  // Fit the map to the PAR region when the PAR button is tapped.
+  useEffect(() => { if (ready.current && parKey) inject(`HU.fitPar()`) }, [parKey])
 
   return (
     <WebView
@@ -194,79 +204,136 @@ const MAP_HTML = `<!DOCTYPE html><html><head>
     });
   }
 
-  function layerPoints(){
-    var L2 = STATE.layer; if(!L2) return [];
-    var h = STATE.hour;
-    if(L2.source==='wave'){
-      if(!STATE.marine) return [];
-      return STATE.marine.points.map(function(p){ var v=(p.wave_height||[])[h]; return {lat:p.lat,lon:p.lon,v:(v==null?null:v)}; });
+  // ── Build a regular 2D value grid for the active layer at this hour ──
+  // (points are ordered idx = yi*nx + xi). For wind we also build the u/v
+  // vector components so particles can be advected by a smooth flow field.
+  function buildGrid(){
+    var L2=STATE.layer; if(!L2) return null;
+    var h=STATE.hour, src;
+    if(L2.source==='wave'){ if(!STATE.marine) return null; src=STATE.marine; }
+    else { if(!STATE.weather) return null; src=STATE.weather; }
+    var nx=src.nx, ny=src.ny, pts=src.points;
+    if(!nx||!ny||!pts||!pts.length) return null;
+    var latMin=90,latMax=-90,lonMin=200,lonMax=-200;
+    for(var i=0;i<pts.length;i++){ var q=pts[i];
+      if(q.lat<latMin)latMin=q.lat; if(q.lat>latMax)latMax=q.lat;
+      if(q.lon<lonMin)lonMin=q.lon; if(q.lon>lonMax)lonMax=q.lon; }
+    var val=[], U=null, V=null;
+    if(L2.arrows){ U=[]; V=[]; }
+    for(var yi=0;yi<ny;yi++){ val[yi]=[]; if(U){U[yi]=[];V[yi]=[];}
+      for(var xi=0;xi<nx;xi++){ var p=pts[yi*nx+xi], v=null;
+        if(p){
+          if(L2.source==='wave'){ v=(p.wave_height||[])[h]; }
+          else if(L2.source==='thunder'){ var cc=(p.cloud||[])[h], rr=(p.precip||[])[h];
+            if(cc!=null&&rr!=null) v=Math.max(0,Math.min(100,cc*0.35+rr*10)); }
+          else { var arr=p[L2.source]; if(arr) v=arr[h]; }
+        }
+        val[yi][xi]=(v==null||isNaN(v))?null:v;
+        if(U){ var sp=(p&&p.wind_speed)?p.wind_speed[h]:null, d=(p&&p.wind_dir)?p.wind_dir[h]:null;
+          if(sp!=null&&d!=null){ var dr=d*Math.PI/180; U[yi][xi]=-sp*Math.sin(dr); V[yi][xi]=-sp*Math.cos(dr); }
+          else { U[yi][xi]=null; V[yi][xi]=null; } }
+      }
     }
-    if(!STATE.weather) return [];
-    return STATE.weather.points.map(function(p){
-      var v=null;
-      if(L2.source==='thunder'){ var c=(p.cloud||[])[h], r=(p.precip||[])[h];
-        if(c!=null&&r!=null) v=Math.max(0,Math.min(100,c*0.35+r*10)); }
-      else { var arr=p[L2.source]; if(arr) v=arr[h]; }
-      return {lat:p.lat,lon:p.lon,v:(v==null?null:v),dir:(p.wind_dir||[])[h]};
-    });
+    return {val:val,U:U,V:V,nx:nx,ny:ny,latMin:latMin,latMax:latMax,lonMin:lonMin,lonMax:lonMax};
   }
+
+  // Bilinear sample of a grid array at a lat/lon (null outside coverage).
+  function sample(G, arr, lat, lon){
+    var gx=(lon-G.lonMin)/(G.lonMax-G.lonMin)*(G.nx-1);
+    var gy=(lat-G.latMin)/(G.latMax-G.latMin)*(G.ny-1);
+    if(gx<0||gx>G.nx-1||gy<0||gy>G.ny-1) return null;
+    var x0=Math.floor(gx),y0=Math.floor(gy),x1=Math.min(x0+1,G.nx-1),y1=Math.min(y0+1,G.ny-1),fx=gx-x0,fy=gy-y0;
+    var a=arr[y0][x0],b=arr[y0][x1],c=arr[y1][x0],d=arr[y1][x1];
+    if(a==null||b==null||c==null||d==null){
+      var best=null,bd=99,cd=[[x0,y0],[x1,y0],[x0,y1],[x1,y1]];
+      for(var k=0;k<4;k++){ var vv=arr[cd[k][1]][cd[k][0]];
+        if(vv!=null){ var dd=Math.abs(cd[k][0]-gx)+Math.abs(cd[k][1]-gy); if(dd<bd){bd=dd;best=vv;} } }
+      return best;
+    }
+    return a*(1-fx)*(1-fy)+b*fx*(1-fy)+c*(1-fx)*fy+d*fx*fy;
+  }
+
+  var GRID=null;
 
   var rafPending=false;
-  function scheduleOverlay(){ if(rafPending) return; rafPending=true; requestAnimationFrame(function(){ rafPending=false; renderOverlay(); }); }
+  function scheduleOverlay(){ if(rafPending) return; rafPending=true; requestAnimationFrame(function(){ rafPending=false; renderField(); }); }
 
-  function renderOverlay(){
+  // Smooth continuous colour field: bilinear-sample onto a low-res offscreen
+  // canvas, then upscale with smoothing (Windy-style, no more blobs).
+  function renderField(){
     var size=map.getSize();
-    [fieldC,arrowC].forEach(function(c){ if(c.width!==size.x||c.height!==size.y){ c.width=size.x; c.height=size.y; } });
-    var fx=fieldC.getContext('2d'), ax=arrowC.getContext('2d');
-    fx.clearRect(0,0,size.x,size.y); ax.clearRect(0,0,size.x,size.y);
-    var L2=STATE.layer;
-    fieldC.style.display = L2?'block':'none'; arrowC.style.display = L2?'block':'none';
-    if(!L2) return;
-    var pts=layerPoints();
-    if(!pts.length) return;
-    // blurred colour field
-    fieldC.style.mixBlendMode = L2.blend || 'screen';
-    fieldC.style.opacity = (L2.blend==='multiply'?0.75:0.72);
-    fx.save(); fx.filter='blur('+(L2.blur||16)+'px)';
-    pts.forEach(function(p){
-      if(p.v==null||isNaN(p.v)) return;
-      var cp=map.latLngToContainerPoint([p.lat,p.lon]);
-      var col=colorRamp(L2.stops,p.v);
-      fx.fillStyle='rgb('+col[0]+','+col[1]+','+col[2]+')';
-      fx.beginPath(); fx.arc(cp.x,cp.y,(L2.radius||88),0,Math.PI*2); fx.fill();
-    });
-    fx.restore();
-    // wind arrows
-    if(L2.arrows){
-      ax.strokeStyle='rgba(255,255,255,.8)'; ax.fillStyle='rgba(255,255,255,.8)'; ax.lineWidth=1.5;
-      pts.forEach(function(p){
-        if(p.v==null||isNaN(p.v)||p.dir==null) return;
-        var cp=map.latLngToContainerPoint([p.lat,p.lon]);
-        var ang=(p.dir+180)*Math.PI/180; // dir = FROM; arrow points TO
-        var len=8+Math.min(16,p.v/3);
-        var dx=Math.sin(ang)*len, dy=-Math.cos(ang)*len;
-        ax.beginPath(); ax.moveTo(cp.x-dx,cp.y-dy); ax.lineTo(cp.x+dx,cp.y+dy); ax.stroke();
-        var ha=0.5; // arrowhead
-        ax.beginPath(); ax.moveTo(cp.x+dx,cp.y+dy);
-        ax.lineTo(cp.x+dx-(Math.sin(ang-ha)*5),cp.y+dy+(Math.cos(ang-ha)*5));
-        ax.lineTo(cp.x+dx-(Math.sin(ang+ha)*5),cp.y+dy+(Math.cos(ang+ha)*5));
-        ax.closePath(); ax.fill();
-      });
+    if(fieldC.width!==size.x||fieldC.height!==size.y){ fieldC.width=size.x; fieldC.height=size.y; }
+    var fx=fieldC.getContext('2d'); fx.clearRect(0,0,size.x,size.y);
+    var L2=STATE.layer; fieldC.style.display=(L2&&GRID)?'block':'none';
+    if(!L2||!GRID) return;
+    fieldC.style.mixBlendMode=L2.blend||'screen';
+    fieldC.style.opacity=(L2.blend==='multiply'?0.85:0.82);
+    var stepPx=5;
+    var w=Math.max(2,Math.ceil(size.x/stepPx)), h=Math.max(2,Math.ceil(size.y/stepPx));
+    // accurate lat per row / lon per col via the real projection
+    var lats=new Array(h), lons=new Array(w);
+    for(var j=0;j<h;j++){ lats[j]=map.containerPointToLatLng([0, j*(size.y/(h-1))]).lat; }
+    for(var i=0;i<w;i++){ lons[i]=map.containerPointToLatLng([i*(size.x/(w-1)), 0]).lng; }
+    var off=document.createElement('canvas'); off.width=w; off.height=h;
+    var octx=off.getContext('2d'), im=octx.createImageData(w,h), dat=im.data;
+    for(var jy=0;jy<h;jy++){ var lat=lats[jy];
+      for(var ix=0;ix<w;ix++){ var v=sample(GRID,GRID.val,lat,lons[ix]); var o=(jy*w+ix)*4;
+        if(v==null||isNaN(v)){ dat[o+3]=0; continue; }
+        var col=colorRamp(L2.stops,v); dat[o]=col[0]; dat[o+1]=col[1]; dat[o+2]=col[2]; dat[o+3]=255;
+      }
     }
+    octx.putImageData(im,0,0);
+    fx.imageSmoothingEnabled=true; fx.imageSmoothingQuality='high';
+    fx.drawImage(off,0,0,w,h,0,0,size.x,size.y);
   }
 
-  // Windy-style per-city value labels for the active layer (IDW-sampled).
+  // ── Animated wind particles (advected by the interpolated flow field) ──
+  var particles=[], windRAF=null, windC=arrowC;
+  windC.style.mixBlendMode='screen';
+  function spawn(p){ p.lat=GRID.latMin+Math.random()*(GRID.latMax-GRID.latMin);
+    p.lon=GRID.lonMin+Math.random()*(GRID.lonMax-GRID.lonMin); p.age=0; p.max=50+Math.random()*70; }
+  function initParticles(){ particles=[]; if(!GRID) return;
+    for(var i=0;i<500;i++){ var p={}; spawn(p); p.age=Math.random()*p.max; particles.push(p); } }
+  function stepParticles(){
+    if(!(STATE.layer && STATE.layer.arrows && GRID)){ windRAF=null; return; }
+    var size=map.getSize();
+    if(windC.width!==size.x||windC.height!==size.y){ windC.width=size.x; windC.height=size.y; }
+    var wx=windC.getContext('2d');
+    wx.globalCompositeOperation='destination-out'; wx.fillStyle='rgba(0,0,0,0.09)'; wx.fillRect(0,0,size.x,size.y);
+    wx.globalCompositeOperation='source-over'; wx.lineWidth=1.25; wx.lineCap='round';
+    for(var i=0;i<particles.length;i++){ var p=particles[i];
+      if(p.age>p.max){ spawn(p); continue; }
+      var u=sample(GRID,GRID.U,p.lat,p.lon), v=sample(GRID,GRID.V,p.lat,p.lon);
+      if(u==null||v==null){ spawn(p); continue; }
+      var a=map.latLngToContainerPoint([p.lat,p.lon]);
+      var k=0.00045;
+      p.lat += v*k; p.lon += u*k/Math.cos(p.lat*Math.PI/180); p.age++;
+      if(p.lat<GRID.latMin||p.lat>GRID.latMax||p.lon<GRID.lonMin||p.lon>GRID.lonMax){ spawn(p); continue; }
+      var b=map.latLngToContainerPoint([p.lat,p.lon]);
+      var col=colorRamp(STATE.layer.stops, Math.sqrt(u*u+v*v));
+      wx.strokeStyle='rgba('+col[0]+','+col[1]+','+col[2]+',0.9)';
+      wx.beginPath(); wx.moveTo(a.x,a.y); wx.lineTo(b.x,b.y); wx.stroke();
+    }
+    windRAF=requestAnimationFrame(stepParticles);
+  }
+  function updateWind(){
+    var on = STATE.layer && STATE.layer.arrows && GRID;
+    if(on){ var size=map.getSize(); windC.width=size.x; windC.height=size.y;
+      windC.style.display='block'; initParticles(); if(!windRAF) windRAF=requestAnimationFrame(stepParticles); }
+    else { if(windRAF){ cancelAnimationFrame(windRAF); windRAF=null; }
+      var wx=windC.getContext('2d'); if(wx) wx.clearRect(0,0,windC.width,windC.height); windC.style.display='none'; }
+  }
+
+  // Rebuild the grid + repaint everything (field, wind, city labels).
+  function refresh(){ GRID=buildGrid(); scheduleOverlay(); updateWind(); renderCities(); }
+
+  // Windy-style per-city value labels — bilinear-sampled from the same grid.
   function renderCities(){
     cityLayer.clearLayers();
-    var L2=STATE.layer; if(!L2) return;
-    var pts=layerPoints(); if(!pts.length) return;
+    var L2=STATE.layer; if(!L2||!GRID) return;
     var unit=L2.unit||'';
     CITIES.forEach(function(c){
-      var num=0,den=0,got=false,exact=null;
-      for(var i=0;i<pts.length;i++){ var p=pts[i]; if(p.v==null||isNaN(p.v)) continue;
-        var dlat=c.lat-p.lat,dlon=c.lon-p.lon,d2=dlat*dlat+dlon*dlon;
-        if(d2<1e-6){ exact=p.v; break; } var w=1/d2; num+=w*p.v; den+=w; got=true; }
-      var v = exact!=null?exact:(got?num/den:null);
+      var v=sample(GRID,GRID.val,c.lat,c.lon);
       if(v==null||isNaN(v)) return;
       var val = (unit==='m'||unit==='mm/h') ? (Math.round(v*10)/10) : Math.round(v);
       var html='<div class="cityval"><div class="cn">'+c.n+'</div><div class="cv">'+val+' '+unit+'</div></div>';
@@ -274,16 +341,21 @@ const MAP_HTML = `<!DOCTYPE html><html><head>
     });
   }
 
-  map.on('move zoom resize', scheduleOverlay);
+  // On pan/zoom, repaint the field and wipe the particle trails so they don't
+  // smear across the re-projected map (the loop rebuilds them immediately).
+  map.on('move zoom resize', function(){ scheduleOverlay();
+    if(windC.width){ var wx=windC.getContext('2d'); if(wx) wx.clearRect(0,0,windC.width,windC.height); } });
 
   window.HU = {
     setBasemap: function(name){ try{ if(name===curBase) return; map.removeLayer(tiles[curBase]); tiles[name].addTo(map); curBase=name; }catch(e){} },
-    setWeather: function(o){ try{ STATE.weather=o?o.weather:null; STATE.marine=o?o.marine:null; scheduleOverlay(); renderCities(); }catch(e){} },
-    setLayer: function(l){ try{ STATE.layer=l; scheduleOverlay(); renderCities(); }catch(e){} },
-    setHour: function(h){ try{ STATE.hour=h|0; renderMarks(); scheduleOverlay(); renderCities(); }catch(e){} },
+    setWeather: function(o){ try{ STATE.weather=o?o.weather:null; STATE.marine=o?o.marine:null; refresh(); }catch(e){} },
+    setLayer: function(l){ try{ STATE.layer=l; refresh(); }catch(e){} },
+    setHour: function(h){ try{ STATE.hour=h|0; renderMarks(); refresh(); }catch(e){} },
     setStorms: function(arr){ try{ STATE.storms=arr||[]; renderTracks(); renderMarks(); }catch(e){} },
     setSpaghetti: function(o){ try{ spag.clearLayers(); if(o&&o.models) o.models.forEach(function(m){ if(m.pts.length>1) L.polyline(m.pts,{color:m.color,weight:1.8,opacity:m.source==='live'?.9:.6,dashArray:m.source==='live'?null:'4 4'}).addTo(spag); }); }catch(e){} },
-    fit: function(){ try{ var b=STATE.storms.map(function(s){return [s.lat,s.lon];}); if(b.length){ map.fitBounds(b,{padding:[60,90],maxZoom:6}); } }catch(e){} }
+    fit: function(){ try{ var b=STATE.storms.map(function(s){return [s.lat,s.lon];}); if(b.length){ map.fitBounds(b,{padding:[60,90],maxZoom:6}); } }catch(e){} },
+    focus: function(name){ try{ var s=null; for(var i=0;i<STATE.storms.length;i++){ if(STATE.storms[i].name===name){ s=STATE.storms[i]; break; } } if(!s) return; var p=interp(s, STATE.hour); map.setView([p.lat,p.lon], 6, {animate:true}); var mk=null; stormMarks.eachLayer(function(l){ if(l.getPopup && l.getLatLng && Math.abs(l.getLatLng().lat-p.lat)<0.05 && Math.abs(l.getLatLng().lng-p.lon)<0.05 && l.getPopup) { mk=l; } }); if(mk && mk.openPopup) setTimeout(function(){ try{ mk.openPopup(); }catch(e){} }, 400); }catch(e){} },
+    fitPar: function(){ try{ map.fitBounds(PAR, {padding:[30,30], animate:true}); }catch(e){} }
   };
 })();
 </script>

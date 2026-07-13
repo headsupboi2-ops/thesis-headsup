@@ -1727,6 +1727,100 @@ def analytics_plot(name):
     return send_file(fp, mimetype='image/png')
 
 
+# ── PAR typhoon archive ────────────────────────────────────────────────────
+# Auto-saved dataset of every storm that approaches or enters the PAR. The
+# frontend POSTs a full forecast record whenever a storm is flagged
+# 'approaching' or 'inside' by the geo-fence; records are upserted by
+# (name, season) so a storm keeps one evolving entry with peak intensity and
+# first-seen / last-updated timestamps. Stored as backend/data/par_archive.json.
+_par_archive_lock = threading.Lock()
+
+def _par_archive_path():
+    d = get_resource_path('data')
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, 'par_archive.json')
+
+def _load_par_archive():
+    fp = _par_archive_path()
+    if not os.path.exists(fp):
+        return []
+    try:
+        with open(fp, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        logger.warning('par_archive read failed: %s', e)
+        return []
+
+
+@app.route('/api/par-archive', methods=['GET'])
+def par_archive_list():
+    """Return every saved PAR typhoon record, newest first."""
+    records = _load_par_archive()
+    records.sort(key=lambda r: r.get('last_updated', ''), reverse=True)
+    return jsonify({'status': 'success', 'count': len(records), 'storms': records})
+
+
+@app.route('/api/par-archive', methods=['POST'])
+def par_archive_save():
+    """Upsert a PAR typhoon record (by name + season). Called automatically by
+    the client for any storm approaching or inside the PAR."""
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get('name') or '').strip()
+    if not name:
+        return jsonify({'status': 'error', 'message': 'storm name required'}), 400
+
+    now = datetime.now(timezone.utc).isoformat()
+    year = int(now[:4])
+    status = payload.get('par_status') or 'approaching'
+    cat = payload.get('category') or 0
+    wind = payload.get('wind_kt') or 0
+
+    with _par_archive_lock:
+        records = _load_par_archive()
+        existing = next(
+            (r for r in records if r.get('name') == name and int(r.get('season', year)) == year),
+            None,
+        )
+        record = {
+            'name': name,
+            'season': year,
+            'category': payload.get('category'),
+            'wind_kt': payload.get('wind_kt'),
+            'lat': payload.get('lat'),
+            'lon': payload.get('lon'),
+            'par_status': status,
+            'eta_hours': payload.get('eta_hours'),
+            'distance_km': payload.get('distance_km'),
+            'consensus': payload.get('consensus'),
+            'track_history': payload.get('track_history') or [],
+            'forecast': payload.get('forecast') or [],
+            'models': payload.get('models') or [],
+            'last_updated': now,
+        }
+        if existing:
+            record['first_saved_at'] = existing.get('first_saved_at', now)
+            record['entered_par'] = bool(existing.get('entered_par')) or status == 'inside'
+            record['peak_category'] = max(int(existing.get('peak_category') or 0), cat)
+            record['peak_wind_kt'] = max(int(existing.get('peak_wind_kt') or 0), wind)
+            records = [record if r is existing else r for r in records]
+        else:
+            record['first_saved_at'] = now
+            record['entered_par'] = status == 'inside'
+            record['peak_category'] = cat
+            record['peak_wind_kt'] = wind
+            records.append(record)
+
+        try:
+            with open(_par_archive_path(), 'w', encoding='utf-8') as f:
+                json.dump(records, f, indent=2)
+        except Exception as e:
+            logger.error('par_archive write failed: %s', e)
+            return jsonify({'status': 'error', 'message': 'could not write archive'}), 500
+
+    return jsonify({'status': 'success', 'saved': name, 'count': len(records)})
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
 

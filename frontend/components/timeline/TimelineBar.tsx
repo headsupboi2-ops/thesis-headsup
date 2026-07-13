@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Sun, Cloud, CloudRain, Droplets } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Sun, Cloud, CloudRain, Droplets, ChevronDown, CalendarDays } from 'lucide-react'
 import { useDashboard } from '@/hooks/useDashboardState'
 import { useTimeline } from '@/hooks/useTimeline'
 import { STEP_HRS, API_BASE } from '@/lib/constants'
@@ -136,6 +136,7 @@ export function TimelineBar() {
   const { forecastHour, isPlaying, appMode, activeStorm } = state
   const { maxHour, togglePlay, stepBack, stepForward, jumpTo } = useTimeline()
   const dayForecasts = useDayForecasts()
+  const [collapsed, setCollapsed] = useState(false)
 
   const now      = new Date()
   const todayStr = now.toISOString().slice(0, 10)
@@ -157,6 +158,25 @@ export function TimelineBar() {
   }) + ' UTC'
 
   const activeDayIdx = Math.floor(forecastHour / 24)
+
+  // Collapsed: hide the whole timeline, leave a small pill to bring it back.
+  if (collapsed) {
+    return (
+      <button
+        onClick={() => setCollapsed(false)}
+        className="fixed bottom-3 right-4 z-[900] flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold text-blue-200 hover:text-white transition-colors"
+        style={{
+          background: 'linear-gradient(180deg, rgba(8,12,32,0.98) 0%, rgba(5,8,25,1) 100%)',
+          border: '1px solid rgba(0,100,255,0.35)',
+          boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+        }}
+        title="Show 7-day forecast"
+      >
+        <CalendarDays size={14} />
+        Show 7-Day Forecast
+      </button>
+    )
+  }
 
   return (
     <div
@@ -220,6 +240,15 @@ export function TimelineBar() {
             <div className="text-[11px] font-bold text-blue-300 leading-tight">{activeStorm.name}</div>
           )}
         </div>
+
+        {/* Hide the 7-day forecast bar */}
+        <button
+          onClick={() => setCollapsed(true)}
+          className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+          title="Hide 7-day forecast"
+        >
+          <ChevronDown size={15} />
+        </button>
       </div>
 
       {/* ── Row 2: 7-day cards ──────────────────────────────────── */}

@@ -1,7 +1,7 @@
 'use client'
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, Home } from 'lucide-react'
 import { DashboardProvider, useDashboard } from '@/hooks/useDashboardState'
 import { useWeatherData } from '@/hooks/useWeatherData'
 import { MapWrapper } from './map/MapWrapper'
@@ -73,8 +73,13 @@ function DashboardShell() {
           </span>
         </div>
 
-        {/* Right: analytics link + clock + live badge */}
+        {/* Right: My Area + analytics link + clock + live badge */}
         <div className="flex items-center gap-3 flex-shrink-0">
+          <Link href="/my-area"
+            className="flex items-center gap-1.5 text-[11px] font-bold text-[#0052cc] bg-blue-50 hover:bg-blue-100
+                       border border-blue-200 rounded-lg px-2.5 py-1 transition-colors">
+            <Home size={13} /> My Area
+          </Link>
           <Link href="/analytics"
             className="flex items-center gap-1.5 text-[11px] font-bold text-[#0052cc] bg-blue-50 hover:bg-blue-100
                        border border-blue-200 rounded-lg px-2.5 py-1 transition-colors">

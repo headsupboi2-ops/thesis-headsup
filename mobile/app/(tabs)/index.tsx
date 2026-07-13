@@ -1,5 +1,6 @@
 import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import { ScreenHeader } from '../../components/ScreenHeader'
 import { StormCard } from '../../components/StormCard'
 import { Loading, EmptyState, ErrorNote, SectionLabel } from '../../components/ui'
@@ -10,6 +11,10 @@ import type { ParAlert } from '../../lib/alerts'
 
 export default function StormsScreen() {
   const { storms, alerts, source, loading, refreshing, error, lastUpdated, refresh } = useStormData()
+  const router = useRouter()
+
+  const focusOnMap = (name: string) =>
+    router.navigate({ pathname: '/map', params: { focus: name, fk: String(Date.now()) } })
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -46,7 +51,8 @@ export default function StormsScreen() {
 
         <View style={{ gap: space.md }}>
           {storms.map(s => (
-            <StormCard key={s.name} storm={s} alert={alerts.find(a => a.storm === s.name)} />
+            <StormCard key={s.name} storm={s} alert={alerts.find(a => a.storm === s.name)}
+              onPress={() => focusOnMap(s.name)} />
           ))}
         </View>
       </ScrollView>

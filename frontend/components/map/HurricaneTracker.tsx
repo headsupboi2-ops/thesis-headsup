@@ -460,31 +460,58 @@ export function HurricaneTracker() {
     [parAlerts, latestHeadlines],
   )
 
-  const [savingChart, setSavingChart] = useState<string | null>(null)
+  // ── Auto-archive every storm that approaches or enters the PAR ──
+  // Any storm the geo-fence flags 'approaching' or 'inside' is saved to the
+  // backend dataset (POST /api/par-archive), which upserts by name+season so a
+  // storm keeps one evolving record. We re-save only when a storm's snapshot
+  // meaningfully changes (status / intensity / position / ETA), so polling
+  // doesn't spam the backend.
+  const savedSigRef = useRef<Map<string, string>>(new Map())
 
-  async function saveChart(storm: TrackedStorm) {
-    setSavingChart(storm.info.name)
-    try {
-      const path = storm.info.path?.length ? storm.info.path.slice(-16) : [{ lat: storm.info.lat, lon: storm.info.lon }]
-      const res = await fetch(`${API_BASE}/api/forecast/chart`, {
+  useEffect(() => {
+    const targets = parAlerts.filter(a => a.status === 'approaching' || a.status === 'inside')
+    if (!targets.length) return
+
+    for (const a of targets) {
+      const storm = storms.find(s => s.info.name === a.storm)
+      if (!storm) continue
+
+      const sig = [
+        a.status, a.category, a.windKt,
+        Math.round(storm.info.lat * 2) / 2, Math.round(storm.info.lon * 2) / 2,
+        a.etaHours ?? '-', storm.forecast.length,
+      ].join('|')
+      if (savedSigRef.current.get(a.storm) === sig) continue
+      savedSigRef.current.set(a.storm, sig)
+
+      const record = {
+        name: a.storm,
+        category: a.category,
+        wind_kt: a.windKt,
+        lat: storm.info.lat,
+        lon: storm.info.lon,
+        pressure: storm.info.pressure ?? null,
+        par_status: a.status,
+        eta_hours: a.etaHours,
+        distance_km: a.distanceKm,
+        consensus: a.consensus,
+        track_history: storm.info.path ?? [],
+        forecast: storm.forecast,
+        models: (modelTracks[a.storm] ?? []).map(t => ({
+          model: t.model, agency: t.agency, source: t.source, points: t.points,
+        })),
+      }
+
+      fetch(`${API_BASE}/api/par-archive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storm_name: storm.info.name, track_history: path }),
+        body: JSON.stringify(record),
+      }).catch(err => {
+        console.error('[HurricaneTracker] PAR archive save failed:', err)
+        savedSigRef.current.delete(a.storm)   // allow a retry on next update
       })
-      if (!res.ok) throw new Error(`Server error ${res.status}`)
-      const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `${storm.info.name}_7day_forecast.png`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      console.error('Save chart failed:', err)
-    } finally {
-      setSavingChart(null)
     }
-  }
+  }, [parAlerts, storms, modelTracks])
 
   if (!active) return null
 
@@ -501,7 +528,6 @@ export function HurricaneTracker() {
     null
 
   const isForecasting = forecastHour > 0 && storms.some(s => s.forecast.length > 0)
-  const forecastedStorms = storms.filter(s => s.forecast.length > 0)
 
   return (
     <>
@@ -546,35 +572,6 @@ export function HurricaneTracker() {
         onClearLog={clearLog}
       />
 
-      {/* Save forecast chart buttons — one per tracked storm */}
-      {forecastedStorms.length > 0 && (
-        <div className="fixed z-[850] flex flex-col gap-1.5"
-          style={{ bottom: 130, right: 16 }}>
-          {forecastedStorms.map(storm => (
-            <button
-              key={storm.info.name}
-              onClick={() => saveChart(storm)}
-              disabled={savingChart === storm.info.name}
-              style={{
-                background: savingChart === storm.info.name ? '#334466' : '#0052cc',
-                color: 'white',
-                border: 'none',
-                borderRadius: 8,
-                padding: '6px 12px',
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: savingChart === storm.info.name ? 'default' : 'pointer',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {savingChart === storm.info.name
-                ? `Generating ${storm.info.name}…`
-                : `Save ${storm.info.name} Forecast`}
-            </button>
-          ))}
-        </div>
-      )}
     </>
   )
 }

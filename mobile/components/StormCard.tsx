@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors, space, font, radius, CAT_COLOR, CAT_NAME, freshnessBadge } from '../lib/theme'
 import { CategoryBadge } from './ui'
@@ -6,7 +6,7 @@ import type { LiveStorm } from '../lib/types'
 import type { ParAlert } from '../lib/alerts'
 import { etaLabel } from '../lib/alerts'
 
-export function StormCard({ storm, alert }: { storm: LiveStorm; alert?: ParAlert }) {
+export function StormCard({ storm, alert, onPress }: { storm: LiveStorm; alert?: ParAlert; onPress?: () => void }) {
   const color = CAT_COLOR[storm.category] ?? colors.textMuted
   const parLine =
     alert?.status === 'inside' ? { text: 'Inside PAR now', color: colors.danger }
@@ -15,12 +15,16 @@ export function StormCard({ storm, alert }: { storm: LiveStorm; alert?: ParAlert
     : { text: 'Outside PAR', color: colors.textMuted }
 
   return (
-    <View style={styles.card}>
+    <Pressable onPress={onPress} disabled={!onPress}
+      style={({ pressed }) => [styles.card, pressed && onPress ? { opacity: 0.75 } : null]}>
       <View style={[styles.accent, { backgroundColor: color }]} />
       <View style={{ flex: 1 }}>
         <View style={styles.topRow}>
           <Text style={styles.name}>{storm.name}</Text>
-          <CategoryBadge category={storm.category} filled />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <CategoryBadge category={storm.category} filled />
+            {onPress ? <Ionicons name="chevron-forward" size={16} color={colors.textMuted} /> : null}
+          </View>
         </View>
         <Text style={styles.cat}>{CAT_NAME[storm.category] ?? 'Storm'}</Text>
 
@@ -36,7 +40,7 @@ export function StormCard({ storm, alert }: { storm: LiveStorm; alert?: ParAlert
           <Freshness storm={storm} />
         </View>
       </View>
-    </View>
+    </Pressable>
   )
 }
 

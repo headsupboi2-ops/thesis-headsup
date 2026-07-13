@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useLocalSearchParams } from 'expo-router'
 import Slider from '@react-native-community/slider'
 import { LeafletMap } from '../../components/LeafletMap'
 import { ScreenHeader } from '../../components/ScreenHeader'
@@ -13,6 +14,7 @@ import { colors, space, font, radius } from '../../lib/theme'
 import type { ModelTrack, TrackPoint } from '../../lib/types'
 
 export default function MapScreen() {
+  const { focus, fk } = useLocalSearchParams<{ focus?: string; fk?: string }>()
   const { storms, forecasts } = useStormData()
   const [spaghetti, setSpaghetti] = useState<{ storm: string; models: ModelTrack[] } | null>(null)
   const [ensembleBusy, setEnsembleBusy] = useState(false)
@@ -20,6 +22,8 @@ export default function MapScreen() {
   const [layerId, setLayerId] = useState<WeatherLayerId | null>(null)
   const [basemap, setBasemap] = useState<BasemapId>('dark')
   const [hour, setHour] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [parKey, setParKey] = useState<string | undefined>(undefined)
 
   const [weatherGrid, setWeatherGrid] = useState<WeatherGrid | null>(null)
   const [marineGrid, setMarineGrid] = useState<MarineGrid | null>(null)
@@ -28,6 +32,13 @@ export default function MapScreen() {
     fetchWeatherGrid().then(setWeatherGrid).catch(() => {})
     fetchMarineGrid().then(setMarineGrid).catch(() => {})
   }, [])
+
+  // Play loop: advance the timeline +3h every 450ms, looping 168h → now.
+  useEffect(() => {
+    if (!playing) return
+    const id = setInterval(() => setHour(h => (h >= 168 ? 0 : h + 3)), 450)
+    return () => clearInterval(id)
+  }, [playing])
 
   const days: DayForecast[] = useMemo(() => weatherGrid ? dailyForecast(weatherGrid) : [], [weatherGrid])
   const strongest = [...storms].sort((a, b) => b.wind_speed - a.wind_speed)[0]
@@ -77,12 +88,17 @@ export default function MapScreen() {
           storms={storms} forecasts={forecasts} spaghetti={spaghetti}
           weatherGrid={weatherGrid} marineGrid={marineGrid}
           layer={activeLayer} forecastHour={hour} basemap={basemap}
+          focusStorm={focus} focusKey={fk} parKey={parKey}
         />
         {activeLayer && (
           <View style={styles.legend}>
             <Text style={styles.legendText}>{activeLayer.label} · {activeLayer.unit}</Text>
           </View>
         )}
+        <Pressable onPress={() => setParKey(String(Date.now()))} style={styles.parBtn}>
+          <Ionicons name="locate" size={15} color={colors.primary} />
+          <Text style={styles.parBtnText}>PAR</Text>
+        </Pressable>
       </View>
 
       {/* 7-day forecast + timeline scrubber */}
@@ -92,13 +108,17 @@ export default function MapScreen() {
             onSelectDay={d => setHour(d * 24)} />
         )}
         <View style={styles.scrubRow}>
+          <Pressable onPress={() => setPlaying(p => !p)} hitSlop={8} style={styles.playBtn}>
+            <Ionicons name={playing ? 'pause' : 'play'} size={15} color="#0a1a3a"
+              style={playing ? undefined : { marginLeft: 2 }} />
+          </Pressable>
           <Text style={styles.scrubLabel}>{hourLabel}</Text>
           <Slider style={{ flex: 1, height: 36 }} minimumValue={0} maximumValue={168} step={1}
-            value={hour} onValueChange={setHour}
+            value={hour} onValueChange={setHour} onSlidingStart={() => setPlaying(false)}
             minimumTrackTintColor={colors.primary} maximumTrackTintColor={colors.border}
             thumbTintColor={colors.primary} />
           {hour !== 0 && (
-            <Pressable onPress={() => setHour(0)} hitSlop={8}>
+            <Pressable onPress={() => { setPlaying(false); setHour(0) }} hitSlop={8}>
               <Ionicons name="refresh" size={16} color={colors.textMuted} />
             </Pressable>
           )}
@@ -145,6 +165,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm, paddingHorizontal: space.sm, paddingVertical: 4,
   },
   legendText: { color: colors.text, fontSize: font.tiny, fontWeight: '700' },
+  parBtn: {
+    position: 'absolute', top: space.sm, left: space.sm,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(10,16,28,0.85)', borderColor: colors.borderStrong, borderWidth: 1,
+    borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 7,
+  },
+  parBtnText: { color: colors.primary, fontSize: font.small, fontWeight: '800', letterSpacing: 0.5 },
+  playBtn: {
+    width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
   bottom: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bgElevated, paddingBottom: 2 },
   scrubRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.lg, paddingBottom: space.sm },
   scrubLabel: { color: colors.text, fontSize: font.tiny, fontWeight: '800', width: 78, fontVariant: ['tabular-nums'] },

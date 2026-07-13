@@ -1,0 +1,1219 @@
+[
+  {
+    "name": "HAISHEN",
+    "season": 2026,
+    "category": 1,
+    "wind_kt": 35,
+    "lat": 11.8,
+    "lon": 136.3,
+    "par_status": "approaching",
+    "eta_hours": 24,
+    "distance_km": 140,
+    "consensus": {
+      "entering": 10,
+      "total": 10
+    },
+    "track_history": [
+      {
+        "lat": 10.7,
+        "lon": 136.7,
+        "pressure": 1002,
+        "wind_speed": 35
+      },
+      {
+        "lat": 10.8,
+        "lon": 136.4,
+        "pressure": 1002,
+        "wind_speed": 35
+      },
+      {
+        "lat": 10.8,
+        "lon": 135.9,
+        "pressure": 1002,
+        "wind_speed": 35
+      },
+      {
+        "lat": 11.8,
+        "lon": 136.3,
+        "pressure": 1002,
+        "wind_speed": 35
+      }
+    ],
+    "forecast": [],
+    "models": [
+      {
+        "model": "PAGASA",
+        "agency": "Philippine Atmospheric, Geophysical and Astronomical Services Administration",
+        "source": "mock",
+        "points": [
+          {
+            "hour": 6,
+            "lat": 12.519,
+            "lon": 135.954,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 12,
+            "lat": 13.246,
+            "lon": 135.612,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 18,
+            "lat": 13.976,
+            "lon": 135.272,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 24,
+            "lat": 14.709,
+            "lon": 134.934,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 30,
+            "lat": 15.443,
+            "lon": 134.598,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 36,
+            "lat": 16.179,
+            "lon": 134.263,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 42,
+            "lat": 16.916,
+            "lon": 133.93,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 48,
+            "lat": 17.655,
+            "lon": 133.597,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 54,
+            "lat": 18.395,
+            "lon": 133.265,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 60,
+            "lat": 19.139,
+            "lon": 132.937,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 66,
+            "lat": 19.89,
+            "lon": 132.621,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 72,
+            "lat": 20.648,
+            "lon": 132.317,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 78,
+            "lat": 21.413,
+            "lon": 132.024,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 84,
+            "lat": 22.186,
+            "lon": 131.742,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 90,
+            "lat": 22.967,
+            "lon": 131.471,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 96,
+            "lat": 23.755,
+            "lon": 131.211,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 102,
+            "lat": 24.55,
+            "lon": 130.962,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 108,
+            "lat": 25.354,
+            "lon": 130.724,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 114,
+            "lat": 26.165,
+            "lon": 130.497,
+            "wind_kt": 31.4
+          },
+          {
+            "hour": 120,
+            "lat": 26.983,
+            "lon": 130.281,
+            "wind_kt": 31.4
+          }
+        ]
+      },
+      {
+        "model": "JTWC",
+        "agency": "Joint Typhoon Warning Center (US)",
+        "source": "mock",
+        "points": [
+          {
+            "hour": 6,
+            "lat": 12.508,
+            "lon": 135.908,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 12,
+            "lat": 13.22,
+            "lon": 135.503,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 18,
+            "lat": 13.932,
+            "lon": 135.091,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 24,
+            "lat": 14.645,
+            "lon": 134.673,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 30,
+            "lat": 15.359,
+            "lon": 134.252,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 36,
+            "lat": 16.072,
+            "lon": 133.827,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 42,
+            "lat": 16.785,
+            "lon": 133.399,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 48,
+            "lat": 17.497,
+            "lon": 132.967,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 54,
+            "lat": 18.209,
+            "lon": 132.534,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 60,
+            "lat": 18.923,
+            "lon": 132.103,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 66,
+            "lat": 19.642,
+            "lon": 131.681,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 72,
+            "lat": 20.367,
+            "lon": 131.27,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 78,
+            "lat": 21.098,
+            "lon": 130.869,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 84,
+            "lat": 21.835,
+            "lon": 130.479,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 90,
+            "lat": 22.58,
+            "lon": 130.099,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 96,
+            "lat": 23.332,
+            "lon": 129.731,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 102,
+            "lat": 24.092,
+            "lon": 129.375,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 108,
+            "lat": 24.86,
+            "lon": 129.03,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 114,
+            "lat": 25.638,
+            "lon": 128.698,
+            "wind_kt": 30.7
+          },
+          {
+            "hour": 120,
+            "lat": 26.424,
+            "lon": 128.377,
+            "wind_kt": 30.7
+          }
+        ]
+      },
+      {
+        "model": "JMA",
+        "agency": "Japan Meteorological Agency (RSMC Tokyo)",
+        "source": "live",
+        "points": [
+          {
+            "hour": 0,
+            "lat": 11.8,
+            "lon": 136.3,
+            "wind_kt": null
+          },
+          {
+            "hour": 24,
+            "lat": 13.9,
+            "lon": 134.9,
+            "wind_kt": null
+          },
+          {
+            "hour": 45,
+            "lat": 15.7,
+            "lon": 135.8,
+            "wind_kt": null
+          }
+        ]
+      },
+      {
+        "model": "ECMWF",
+        "agency": "European Centre for Medium-Range Weather Forecasts",
+        "source": "mock",
+        "points": [
+          {
+            "hour": 6,
+            "lat": 12.503,
+            "lon": 135.915,
+            "wind_kt": 30
+          },
+          {
+            "hour": 12,
+            "lat": 13.207,
+            "lon": 135.519,
+            "wind_kt": 30
+          },
+          {
+            "hour": 18,
+            "lat": 13.912,
+            "lon": 135.117,
+            "wind_kt": 30
+          },
+          {
+            "hour": 24,
+            "lat": 14.617,
+            "lon": 134.712,
+            "wind_kt": 30
+          },
+          {
+            "hour": 30,
+            "lat": 15.322,
+            "lon": 134.303,
+            "wind_kt": 30
+          },
+          {
+            "hour": 36,
+            "lat": 16.028,
+            "lon": 133.891,
+            "wind_kt": 30
+          },
+          {
+            "hour": 42,
+            "lat": 16.735,
+            "lon": 133.478,
+            "wind_kt": 30
+          },
+          {
+            "hour": 48,
+            "lat": 17.444,
+            "lon": 133.062,
+            "wind_kt": 30
+          },
+          {
+            "hour": 54,
+            "lat": 18.155,
+            "lon": 132.644,
+            "wind_kt": 30
+          },
+          {
+            "hour": 60,
+            "lat": 18.869,
+            "lon": 132.23,
+            "wind_kt": 30
+          },
+          {
+            "hour": 66,
+            "lat": 19.592,
+            "lon": 131.826,
+            "wind_kt": 30
+          },
+          {
+            "hour": 72,
+            "lat": 20.322,
+            "lon": 131.434,
+            "wind_kt": 30
+          },
+          {
+            "hour": 78,
+            "lat": 21.059,
+            "lon": 131.052,
+            "wind_kt": 30
+          },
+          {
+            "hour": 84,
+            "lat": 21.804,
+            "lon": 130.681,
+            "wind_kt": 30
+          },
+          {
+            "hour": 90,
+            "lat": 22.556,
+            "lon": 130.321,
+            "wind_kt": 30
+          },
+          {
+            "hour": 96,
+            "lat": 23.315,
+            "lon": 129.973,
+            "wind_kt": 30
+          },
+          {
+            "hour": 102,
+            "lat": 24.079,
+            "lon": 129.636,
+            "wind_kt": 30
+          },
+          {
+            "hour": 108,
+            "lat": 24.849,
+            "lon": 129.311,
+            "wind_kt": 30
+          },
+          {
+            "hour": 114,
+            "lat": 25.623,
+            "lon": 128.997,
+            "wind_kt": 30
+          },
+          {
+            "hour": 120,
+            "lat": 26.401,
+            "lon": 128.695,
+            "wind_kt": 30
+          }
+        ]
+      },
+      {
+        "model": "GFS",
+        "agency": "US NCEP Global Forecast System",
+        "source": "mock",
+        "points": [
+          {
+            "hour": 6,
+            "lat": 12.516,
+            "lon": 135.917,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 12,
+            "lat": 13.237,
+            "lon": 135.523,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 18,
+            "lat": 13.961,
+            "lon": 135.123,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 24,
+            "lat": 14.688,
+            "lon": 134.721,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 30,
+            "lat": 15.418,
+            "lon": 134.316,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 36,
+            "lat": 16.152,
+            "lon": 133.91,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 42,
+            "lat": 16.89,
+            "lon": 133.503,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 48,
+            "lat": 17.63,
+            "lon": 133.095,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 54,
+            "lat": 18.374,
+            "lon": 132.687,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 60,
+            "lat": 19.121,
+            "lon": 132.282,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 66,
+            "lat": 19.875,
+            "lon": 131.887,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 72,
+            "lat": 20.633,
+            "lon": 131.502,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 78,
+            "lat": 21.395,
+            "lon": 131.126,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 84,
+            "lat": 22.158,
+            "lon": 130.758,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 90,
+            "lat": 22.923,
+            "lon": 130.398,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 96,
+            "lat": 23.687,
+            "lon": 130.045,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 102,
+            "lat": 24.451,
+            "lon": 129.7,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 108,
+            "lat": 25.216,
+            "lon": 129.363,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 114,
+            "lat": 25.983,
+            "lon": 129.036,
+            "wind_kt": 36.6
+          },
+          {
+            "hour": 120,
+            "lat": 26.755,
+            "lon": 128.718,
+            "wind_kt": 36.6
+          }
+        ]
+      },
+      {
+        "model": "CWB",
+        "agency": "Central Weather Administration, Taiwan",
+        "source": "mock",
+        "points": [
+          {
+            "hour": 6,
+            "lat": 12.54,
+            "lon": 135.936,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 12,
+            "lat": 13.296,
+            "lon": 135.569,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 18,
+            "lat": 14.059,
+            "lon": 135.2,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 24,
+            "lat": 14.828,
+            "lon": 134.83,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 30,
+            "lat": 15.602,
+            "lon": 134.46,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 36,
+            "lat": 16.38,
+            "lon": 134.092,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 42,
+            "lat": 17.161,
+            "lon": 133.726,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 48,
+            "lat": 17.946,
+            "lon": 133.363,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 54,
+            "lat": 18.735,
+            "lon": 133.002,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 60,
+            "lat": 19.528,
+            "lon": 132.65,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 66,
+            "lat": 20.33,
+            "lon": 132.312,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 72,
+            "lat": 21.14,
+            "lon": 131.99,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 78,
+            "lat": 21.959,
+            "lon": 131.681,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 84,
+            "lat": 22.784,
+            "lon": 131.385,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 90,
+            "lat": 23.618,
+            "lon": 131.101,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 96,
+            "lat": 24.459,
+            "lon": 130.827,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 102,
+            "lat": 25.306,
+            "lon": 130.562,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 108,
+            "lat": 26.16,
+            "lon": 130.303,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 114,
+            "lat": 27.021,
+            "lon": 130.05,
+            "wind_kt": 38.5
+          },
+          {
+            "hour": 120,
+            "lat": 27.887,
+            "lon": 129.801,
+            "wind_kt": 38.5
+          }
+        ]
+      },
+      {
+        "model": "HKO",
+        "agency": "Hong Kong Observatory",
+        "source": "mock",
+        "points": [
+          {
+            "hour": 6,
+            "lat": 12.486,
+            "lon": 135.936,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 12,
+            "lat": 13.167,
+            "lon": 135.568,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 18,
+            "lat": 13.847,
+            "lon": 135.197,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 24,
+            "lat": 14.524,
+            "lon": 134.824,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 30,
+            "lat": 15.199,
+            "lon": 134.452,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 36,
+            "lat": 15.871,
+            "lon": 134.085,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 42,
+            "lat": 16.538,
+            "lon": 133.724,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 48,
+            "lat": 17.201,
+            "lon": 133.37,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 54,
+            "lat": 17.86,
+            "lon": 133.023,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 60,
+            "lat": 18.518,
+            "lon": 132.684,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 66,
+            "lat": 19.18,
+            "lon": 132.357,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 72,
+            "lat": 19.851,
+            "lon": 132.036,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 78,
+            "lat": 20.532,
+            "lon": 131.714,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 84,
+            "lat": 21.225,
+            "lon": 131.387,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 90,
+            "lat": 21.934,
+            "lon": 131.052,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 96,
+            "lat": 22.656,
+            "lon": 130.709,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 102,
+            "lat": 23.391,
+            "lon": 130.362,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 108,
+            "lat": 24.136,
+            "lon": 130.018,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 114,
+            "lat": 24.886,
+            "lon": 129.687,
+            "wind_kt": 32.7
+          },
+          {
+            "hour": 120,
+            "lat": 25.635,
+            "lon": 129.383,
+            "wind_kt": 32.7
+          }
+        ]
+      },
+      {
+        "model": "CMA",
+        "agency": "China Meteorological Administration",
+        "source": "mock",
+        "points": [
+          {
+            "hour": 6,
+            "lat": 12.5,
+            "lon": 135.99,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 12,
+            "lat": 13.202,
+            "lon": 135.697,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 18,
+            "lat": 13.905,
+            "lon": 135.413,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 24,
+            "lat": 14.611,
+            "lon": 135.135,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 30,
+            "lat": 15.32,
+            "lon": 134.863,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 36,
+            "lat": 16.031,
+            "lon": 134.594,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 42,
+            "lat": 16.743,
+            "lon": 134.329,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 48,
+            "lat": 17.456,
+            "lon": 134.068,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 54,
+            "lat": 18.167,
+            "lon": 133.81,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 60,
+            "lat": 18.876,
+            "lon": 133.559,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 66,
+            "lat": 19.585,
+            "lon": 133.323,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 72,
+            "lat": 20.294,
+            "lon": 133.101,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 78,
+            "lat": 20.999,
+            "lon": 132.894,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 84,
+            "lat": 21.702,
+            "lon": 132.701,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 90,
+            "lat": 22.402,
+            "lon": 132.522,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 96,
+            "lat": 23.099,
+            "lon": 132.358,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 102,
+            "lat": 23.797,
+            "lon": 132.209,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 108,
+            "lat": 24.498,
+            "lon": 132.073,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 114,
+            "lat": 25.205,
+            "lon": 131.952,
+            "wind_kt": 38.2
+          },
+          {
+            "hour": 120,
+            "lat": 25.922,
+            "lon": 131.846,
+            "wind_kt": 38.2
+          }
+        ]
+      },
+      {
+        "model": "UKMO",
+        "agency": "UK Met Office Unified Model",
+        "source": "mock",
+        "points": [
+          {
+            "hour": 6,
+            "lat": 12.45,
+            "lon": 135.938,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 12,
+            "lat": 13.081,
+            "lon": 135.573,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 18,
+            "lat": 13.703,
+            "lon": 135.206,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 24,
+            "lat": 14.318,
+            "lon": 134.836,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 30,
+            "lat": 14.928,
+            "lon": 134.465,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 36,
+            "lat": 15.532,
+            "lon": 134.093,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 42,
+            "lat": 16.133,
+            "lon": 133.721,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 48,
+            "lat": 16.73,
+            "lon": 133.35,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 54,
+            "lat": 17.323,
+            "lon": 132.983,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 60,
+            "lat": 17.915,
+            "lon": 132.624,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 66,
+            "lat": 18.509,
+            "lon": 132.282,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 72,
+            "lat": 19.106,
+            "lon": 131.957,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 78,
+            "lat": 19.706,
+            "lon": 131.649,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 84,
+            "lat": 20.308,
+            "lon": 131.357,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 90,
+            "lat": 20.914,
+            "lon": 131.08,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 96,
+            "lat": 21.524,
+            "lon": 130.814,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 102,
+            "lat": 22.138,
+            "lon": 130.558,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 108,
+            "lat": 22.757,
+            "lon": 130.308,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 114,
+            "lat": 23.381,
+            "lon": 130.063,
+            "wind_kt": 37.9
+          },
+          {
+            "hour": 120,
+            "lat": 24.01,
+            "lon": 129.819,
+            "wind_kt": 37.9
+          }
+        ]
+      },
+      {
+        "model": "AI_ENSEMBLE",
+        "agency": "HeadsUp in-house LSTM + physics model",
+        "source": "live",
+        "points": [
+          {
+            "hour": 6,
+            "lat": 12.5,
+            "lon": 135.944,
+            "wind_kt": 35
+          },
+          {
+            "hour": 12,
+            "lat": 13.2,
+            "lon": 135.588,
+            "wind_kt": 35
+          },
+          {
+            "hour": 18,
+            "lat": 13.9,
+            "lon": 135.232,
+            "wind_kt": 35
+          },
+          {
+            "hour": 24,
+            "lat": 14.6,
+            "lon": 134.876,
+            "wind_kt": 35
+          },
+          {
+            "hour": 30,
+            "lat": 15.3,
+            "lon": 134.52,
+            "wind_kt": 35
+          },
+          {
+            "hour": 36,
+            "lat": 16,
+            "lon": 134.164,
+            "wind_kt": 35
+          },
+          {
+            "hour": 42,
+            "lat": 16.7,
+            "lon": 133.808,
+            "wind_kt": 35
+          },
+          {
+            "hour": 48,
+            "lat": 17.4,
+            "lon": 133.452,
+            "wind_kt": 35
+          },
+          {
+            "hour": 54,
+            "lat": 18.1,
+            "lon": 133.096,
+            "wind_kt": 35
+          },
+          {
+            "hour": 60,
+            "lat": 18.8022,
+            "lon": 132.7447,
+            "wind_kt": 35
+          },
+          {
+            "hour": 66,
+            "lat": 19.51,
+            "lon": 132.4053,
+            "wind_kt": 35
+          },
+          {
+            "hour": 72,
+            "lat": 20.2235,
+            "lon": 132.078,
+            "wind_kt": 35
+          },
+          {
+            "hour": 78,
+            "lat": 20.9428,
+            "lon": 131.7629,
+            "wind_kt": 35
+          },
+          {
+            "hour": 84,
+            "lat": 21.6677,
+            "lon": 131.46,
+            "wind_kt": 35
+          },
+          {
+            "hour": 90,
+            "lat": 22.3986,
+            "lon": 131.1694,
+            "wind_kt": 35
+          },
+          {
+            "hour": 96,
+            "lat": 23.1352,
+            "lon": 130.8913,
+            "wind_kt": 35
+          },
+          {
+            "hour": 102,
+            "lat": 23.8778,
+            "lon": 130.6258,
+            "wind_kt": 35
+          },
+          {
+            "hour": 108,
+            "lat": 24.6263,
+            "lon": 130.3729,
+            "wind_kt": 35
+          },
+          {
+            "hour": 114,
+            "lat": 25.3808,
+            "lon": 130.1327,
+            "wind_kt": 35
+          },
+          {
+            "hour": 120,
+            "lat": 26.1414,
+            "lon": 129.9054,
+            "wind_kt": 35
+          }
+        ]
+      }
+    ],
+    "last_updated": "2026-07-13T12:09:23.225173+00:00",
+    "first_saved_at": "2026-07-13T12:09:23.225173+00:00",
+    "entered_par": false,
+    "peak_category": 1,
+    "peak_wind_kt": 35
+  }
+]
