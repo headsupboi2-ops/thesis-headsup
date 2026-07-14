@@ -1,8 +1,13 @@
 // ── Philippine flood-hazard geography (curated) ─────────────────────
-// `floodSusceptibility` is a 0–1 INDEX distilled from public flood-hazard
-// knowledge (Project NOAH / PAGASA / MGB susceptibility maps): nearness to
-// rivers, low-lying deltas, and drainage. Coordinates are approximate
-// barangay / city centres. This is a RISK INDEX, not a surveyed flood model.
+// `floodSusceptibility` is a 0–1 INDEX. The current values are derived from
+// hydrogeographic reasoning (nearness to the Naga/Bicol rivers, low-lying vs
+// upland terrain, barangays with documented recurrent flooding) — NOT yet from
+// an ingested official raster. This is a RISK INDEX, not a surveyed flood model.
+//
+// To ground it for the thesis, set each value from an official hazard map
+// (Project NOAH / MGB flood-susceptibility / Naga City DRRMO — Low≈0.25,
+// Moderate≈0.55, High≈0.85) and record the reference in `source`. No other code
+// changes are needed. See docs/flood-surge-methodology.md.
 import { haversineKm } from './geo'
 
 export type CoastalExposure = 'none' | 'bay' | 'open'
@@ -14,6 +19,7 @@ export interface HazardArea {
   floodSusceptibility: number     // 0 (rain runs off) … 1 (floods readily)
   coastalExposure: CoastalExposure
   note?: string
+  source?: string                 // official hazard-map citation, once grounded
 }
 
 // Naga City barangays. Naga sits inland (~20 km from San Miguel Bay), so its
