@@ -9,6 +9,7 @@ import { ForecastStrip } from '../../components/ForecastStrip'
 import { useStormData } from '../../hooks/useStormData'
 import { fetchMultiModel } from '../../lib/api'
 import { fetchWeatherGrid, fetchMarineGrid, dailyForecast, type WeatherGrid, type MarineGrid, type DayForecast } from '../../lib/weather'
+import { susceptibilityAt } from '../../lib/hazard'
 import { WEATHER_LAYERS, WEATHER_LAYER_BY_ID, type WeatherLayerId, type BasemapId } from '../../lib/weatherLayers'
 import { colors, space, font, radius } from '../../lib/theme'
 import type { ModelTrack, TrackPoint } from '../../lib/types'
@@ -40,18 +41,33 @@ export default function MapScreen() {
     return () => clearInterval(id)
   }, [playing])
 
+  // Attach per-point flood susceptibility once, so the WebView can render the
+  // Flood layer (trailing-24h rainfall × susceptibility) with no backend change.
+  const weatherGridWithSusc = useMemo(() => weatherGrid
+    ? { ...weatherGrid, points: weatherGrid.points.map(p => ({ ...p, flood_susc: susceptibilityAt(p.lat, p.lon) })) }
+    : null, [weatherGrid])
+
   const days: DayForecast[] = useMemo(() => weatherGrid ? dailyForecast(weatherGrid) : [], [weatherGrid])
   const strongest = [...storms].sort((a, b) => b.wind_speed - a.wind_speed)[0]
   const activeLayer = layerId ? WEATHER_LAYER_BY_ID[layerId] : null
 
   async function toggleEnsemble() {
     if (spaghetti) { setSpaghetti(null); return }
-    if (!strongest) return
+    if (!storms.length) return
     setEnsembleBusy(true)
     try {
-      const history: TrackPoint[] = strongest.path?.length ? strongest.path.slice(-16) : [{ lat: strongest.lat, lon: strongest.lon }]
-      const res = await fetchMultiModel(strongest.name, history)
-      setSpaghetti({ storm: strongest.name, models: res.models })
+      // Fetch the 10-model ensemble for EVERY active storm (in parallel) and
+      // combine them, so each storm shows its own spaghetti — not just the
+      // strongest one.
+      const perStorm = await Promise.all(storms.map(async s => {
+        const history: TrackPoint[] = s.path?.length ? s.path.slice(-16) : [{ lat: s.lat, lon: s.lon }]
+        try {
+          const res = await fetchMultiModel(s.name, history)
+          return res.models
+        } catch { return [] as ModelTrack[] }
+      }))
+      const models = perStorm.flat()
+      if (models.length) setSpaghetti({ storm: storms.map(s => s.name).join(' + '), models })
     } catch { /* keep map as-is */ }
     finally { setEnsembleBusy(false) }
   }
@@ -86,7 +102,7 @@ export default function MapScreen() {
       <View style={styles.mapWrap}>
         <LeafletMap
           storms={storms} forecasts={forecasts} spaghetti={spaghetti}
-          weatherGrid={weatherGrid} marineGrid={marineGrid}
+          weatherGrid={weatherGridWithSusc} marineGrid={marineGrid}
           layer={activeLayer} forecastHour={hour} basemap={basemap}
           focusStorm={focus} focusKey={fk} parKey={parKey}
         />

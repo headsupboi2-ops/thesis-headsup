@@ -4,7 +4,7 @@ import { LayerPill } from './LayerPill'
 import { LAYER_META } from '@/lib/constants'
 import type { LayerType, MapTheme } from '@/lib/types'
 
-const LAYERS: LayerType[] = ['wind', 'rain', 'temp', 'heat', 'cloud', 'wave', 'thunder', 'hurricane', 'seasonal', 'satellite']
+const LAYERS: LayerType[] = ['wind', 'rain', 'temp', 'heat', 'cloud', 'wave', 'thunder', 'flood', 'hurricane', 'seasonal', 'satellite']
 const THEMES: { key: MapTheme; label: string }[] = [
   { key: 'satellite', label: 'SAT' },
   { key: 'terrain',   label: 'MAP' },

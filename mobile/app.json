@@ -44,7 +44,7 @@
       "expo-font"
     ],
     "extra": {
-      "apiBaseUrl": "http://192.168.1.15:5000"
+      "apiBaseUrl": "http://192.168.1.8:5000"
     }
   }
 }

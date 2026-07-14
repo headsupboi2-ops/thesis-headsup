@@ -35,6 +35,7 @@ export const LAYER_META: Record<LayerType, {
   satellite:{ label: 'Satellite Only',    dot: '#33aa33', description: 'Esri World Imagery',                           unit: '' },
   hurricane:{ label: 'Hurricane Tracker', dot: '#ff4400', description: 'Active typhoon tracks & 7-day forecast paths',  unit: '' },
   thunder:  { label: 'Thunderstorm',      dot: '#ffcc00', description: 'Thunderstorm probability from cloud & rainfall', unit: '%' },
+  flood:    { label: 'Flood Risk',        dot: '#b026ff', description: 'Rainfall × local flood susceptibility (Naga barangay detail)', unit: '' },
 }
 
 export const MAP_TILES: Record<MapTheme, { url: string; attr: string; maxZoom: number; sub?: string }> = {

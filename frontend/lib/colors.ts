@@ -61,6 +61,16 @@ export const thunderColor = (v: number): RGB => colorRamp([
   [100, [255,  0,255]],   // magenta
 ], v)
 
+export const floodColor   = (v: number): RGB => colorRamp([
+  [0,   [0,  0,  0  ]],   // transparent
+  [6,   [0,  70, 35 ]],   // minimal (green)
+  [12,  [225,225,0  ]],   // low (yellow)
+  [30,  [255,150,0  ]],   // moderate (orange)
+  [50,  [255, 40,30 ]],   // high (red)
+  [70,  [176,38,255 ]],   // severe (purple)
+  [100, [150, 0,220 ]],
+], v)
+
 export const seasonColor  = (d: number): RGB => colorRamp([
   [0,[20,30,80]], [0.25,[60,0,160]], [0.5,[150,0,150]],
   [0.75,[200,0,100]], [1,[255,30,60]],

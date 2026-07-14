@@ -226,6 +226,11 @@ const MAP_HTML = `<!DOCTYPE html><html><head>
           if(L2.source==='wave'){ v=(p.wave_height||[])[h]; }
           else if(L2.source==='thunder'){ var cc=(p.cloud||[])[h], rr=(p.precip||[])[h];
             if(cc!=null&&rr!=null) v=Math.max(0,Math.min(100,cc*0.35+rr*10)); }
+          else if(L2.source==='flood'){ var susc=p.flood_susc;
+            if(susc!=null){ var prc=p.precip||[], lo=Math.max(0,h-23), sum=0;
+              for(var hh=lo;hh<=h;hh++){ var rv=prc[hh]; if(rv!=null&&!isNaN(rv)) sum+=rv; }
+              var rs=Math.max(0,Math.min(1,sum/220));
+              v=Math.max(0,Math.min(1,rs*(0.55+0.9*susc)))*100; } }
           else { var arr=p[L2.source]; if(arr) v=arr[h]; }
         }
         val[yi][xi]=(v==null||isNaN(v))?null:v;

@@ -4,12 +4,13 @@
 // rest drives the chip bar and legend. Colours match the web app.
 import type { Stop } from './weatherColors'
 
-export type WeatherLayerId = 'wind' | 'rain' | 'temp' | 'heat' | 'cloud' | 'wave' | 'thunder'
+export type WeatherLayerId = 'wind' | 'rain' | 'temp' | 'heat' | 'cloud' | 'wave' | 'thunder' | 'flood'
 export type BasemapId = 'dark' | 'satellite'
 
 /** Which grid variable a layer reads. 'wave' comes from the marine grid,
- *  'thunder' is derived from cloud + precip; the rest are direct weather-grid fields. */
-export type LayerSource = 'wind_speed' | 'precip' | 'temp' | 'heat' | 'cloud' | 'wave' | 'thunder'
+ *  'thunder' is derived from cloud + precip, 'flood' from trailing-24h rainfall
+ *  × local susceptibility; the rest are direct weather-grid fields. */
+export type LayerSource = 'wind_speed' | 'precip' | 'temp' | 'heat' | 'cloud' | 'wave' | 'thunder' | 'flood'
 
 export interface WeatherLayer {
   id: WeatherLayerId
@@ -59,6 +60,13 @@ export const WEATHER_LAYERS: WeatherLayer[] = [
     id: 'thunder', label: 'Storm', icon: 'thunderstorm', unit: '%', source: 'thunder',
     blend: 'screen', radius: 84, blur: 18,
     stops: [[0, [0, 0, 0]], [18, [30, 25, 0]], [35, [120, 90, 0]], [55, [220, 160, 0]], [72, [255, 70, 0]], [88, [200, 0, 160]], [100, [255, 0, 255]]],
+  },
+  {
+    id: 'flood', label: 'Flood', icon: 'water', unit: '', source: 'flood',
+    blend: 'screen', radius: 84, blur: 18,
+    // Trailing-24h rainfall × susceptibility, scored 0–100 to match flood levels
+    // (12 low · 30 moderate · 50 high · 70 severe).
+    stops: [[0, [0, 0, 0]], [6, [0, 70, 35]], [12, [225, 225, 0]], [30, [255, 150, 0]], [50, [255, 40, 30]], [70, [176, 38, 255]], [100, [150, 0, 220]]],
   },
 ]
 

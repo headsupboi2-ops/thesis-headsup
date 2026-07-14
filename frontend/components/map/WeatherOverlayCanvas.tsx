@@ -5,6 +5,7 @@ import { useOverlayCanvas } from '@/hooks/useOverlayCanvas'
 import { useDashboard } from '@/hooks/useDashboardState'
 import type { LayerType } from '@/lib/types'
 import { LAYER_META } from '@/lib/constants'
+import { susceptibilityAt } from '@/lib/hazard'
 
 function getValueAt(
   layer: LayerType,
@@ -32,6 +33,12 @@ function getValueAt(
   else if (layer === 'cloud') value = (closest.cloud ?? 0).toFixed(0)
   else if (layer === 'wave')  value = (closest.waveHeight ?? 0).toFixed(2)
   else if (layer === 'rain')  value = (closest.precip ?? 0).toFixed(1)
+  else if (layer === 'flood') {
+    const r = closest.precip ?? 0
+    const susc = susceptibilityAt(lat, lon)
+    const score = Math.max(0, Math.min(1, (r / 25) * (0.55 + 0.9 * susc))) * 100
+    return { label: 'Flood risk', value: score.toFixed(0), unit: '/100' }
+  }
   return { label: meta.label, value, unit: meta.unit }
 }
 
@@ -72,7 +79,7 @@ export function WeatherOverlayCanvas() {
   const visible = activeLayer !== 'wind' && activeLayer !== 'satellite' && activeLayer !== 'hurricane'
 
   const blendMode: React.CSSProperties['mixBlendMode'] =
-    activeLayer === 'rain' || activeLayer === 'thunder'
+    activeLayer === 'rain' || activeLayer === 'thunder' || activeLayer === 'flood'
       ? 'screen'                          // black=transparent on dark map
       : activeLayer === 'heat' || activeLayer === 'temp' || activeLayer === 'seasonal'
       ? 'screen'

@@ -1,18 +1,50 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, MapPin, Home, Navigation, Clock, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, MapPin, Home, Navigation, Clock, AlertTriangle, ShieldCheck, Droplets, Waves } from 'lucide-react'
 import { fetchRealtimeStorms } from '@/lib/analytics'
 import { API_BASE } from '@/lib/constants'
 import type { MultiModelResponse } from '@/lib/forecastModels'
 import { PH_CITIES, DEFAULT_CITY, type City } from '@/lib/cities'
 import { computeImpact, mostThreatening, riskMeta, type Impact, type ModelLite } from '@/lib/impact'
 import { prepTimeline } from '@/lib/prep'
+import { rainAccum, floodPotential, floodMeta, type RainPoint } from '@/lib/flood'
+import { surgeRisk, surgeMeta } from '@/lib/surge'
+import { NAGA_BARANGAYS, nearestBarangay, susceptibilityAt, coastalExposureAt, type HazardArea } from '@/lib/hazard'
+
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export function ImpactReport() {
   const [city, setCity] = useState<City>(DEFAULT_CITY)
   const [impact, setImpact] = useState<Impact | null>(null)
   const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading')
+  const [barangay, setBarangay] = useState<HazardArea | null>(null)
+  const [rainPoints, setRainPoints] = useState<RainPoint[] | null>(null)
+  const [gridHours, setGridHours] = useState(168)
+
+  // Barangay-level detail for Naga; other cities resolve from the hazard zones.
+  const isNaga = city.name === 'Naga'
+  const bgy = isNaga ? (barangay ?? nearestBarangay(city.lat, city.lon)) : null
+  const loc = bgy ? { lat: bgy.lat, lon: bgy.lon } : { lat: city.lat, lon: city.lon }
+  const susceptibility = bgy ? bgy.floodSusceptibility : susceptibilityAt(city.lat, city.lon)
+  const exposure = bgy ? bgy.coastalExposure : coastalExposureAt(city.lat, city.lon)
+  const areaLabel = bgy ? `${bgy.name}, Naga` : city.name
+
+  useEffect(() => { if (!isNaga) setBarangay(null) }, [isNaga])
+
+  // Rainfall grid (cached 30 min server-side) — drives the flood risk.
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/weather/fullgrid?region=par`, { cache: 'no-store' })
+        if (!res.ok) return
+        const json = await res.json()
+        if (alive && json.points) { setRainPoints(json.points); setGridHours(Math.min(json.n_hours ?? 168, 168)) }
+      } catch { /* leave flood card hidden */ }
+    })()
+    return () => { alive = false }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -69,6 +101,16 @@ export function ImpactReport() {
             className="bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 font-bold outline-none">
             {PH_CITIES.map(c => <option key={`${c.name}|${c.province}`} value={`${c.name}|${c.province}`}>{c.name}, {c.province}</option>)}
           </select>
+          {isNaga && (
+            <select
+              value={bgy?.name ?? ''}
+              onChange={e => { const b = NAGA_BARANGAYS.find(x => x.name === e.target.value); if (b) setBarangay(b) }}
+              className="bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 text-[#0052cc] font-bold outline-none"
+              title="Naga barangay">
+              {[...NAGA_BARANGAYS].sort((a, b) => b.floodSusceptibility - a.floodSusceptibility)
+                .map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+            </select>
+          )}
         </label>
       </header>
 
@@ -86,6 +128,9 @@ export function ImpactReport() {
               <ModelAgreement impact={impact} />
             </>
           )}
+
+        <FloodSurgeCard points={rainPoints} hours={gridHours} lat={loc.lat} lon={loc.lon}
+          susceptibility={susceptibility} exposure={exposure} impact={impact} areaLabel={areaLabel} />
       </main>
     </div>
   )
@@ -198,6 +243,72 @@ function ModelAgreement({ impact }: { impact: Impact }) {
           </div>
         ))}
       </div>
+    </Panel>
+  )
+}
+
+function FloodSurgeCard({ points, hours, lat, lon, susceptibility, exposure, impact, areaLabel }: {
+  points: RainPoint[] | null; hours: number; lat: number; lon: number; susceptibility: number
+  exposure: 'none' | 'bay' | 'open'; impact: Impact | null; areaLabel: string
+}) {
+  if (!points) return null
+
+  // Peak 24-hour rainfall over the 7-day forecast at this location.
+  let peakMm = 0, peakDay = 0
+  for (let d = 0; d < 7; d++) {
+    const s = d * 24
+    if (s >= hours) break
+    const mm = rainAccum(points, lat, lon, s, Math.min(s + 24, hours))
+    if (mm > peakMm) { peakMm = mm; peakDay = d }
+  }
+  const flood = floodPotential(peakMm, susceptibility)
+  const fMeta = floodMeta(flood.level)
+  const dayDate = new Date(Date.now() + peakDay * 86400000)
+  const dayLabel = peakDay === 0 ? 'today' : peakDay === 1 ? 'tomorrow' : DOW[dayDate.getDay()]
+
+  const surge = surgeRisk(impact?.expectedWindKt ?? 0, impact?.closestKm ?? 9999, impact?.etaEarliest ?? null, exposure)
+  const sMeta = surgeMeta(surge.level)
+
+  return (
+    <Panel>
+      <p className="text-[11px] font-bold uppercase tracking-[1.1px] text-slate-400 mb-3">Flood &amp; surge risk · {areaLabel}</p>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-4">
+          <div className="w-24 shrink-0 flex flex-col items-center justify-center gap-1 rounded-xl py-3"
+            style={{ background: `${fMeta.color}18`, border: `1px solid ${fMeta.color}55` }}>
+            <Droplets size={20} style={{ color: fMeta.color }} />
+            <span className="text-sm font-black" style={{ color: fMeta.color }}>{fMeta.word}</span>
+          </div>
+          <div className="flex-1">
+            <div className="text-slate-800 font-extrabold text-sm">Flood potential</div>
+            <div className="text-slate-500 text-sm mt-0.5">
+              {peakMm >= 1 ? `${flood.rainMm} mm/24h forecast ${dayLabel}` : 'Little rain forecast this week'}
+            </div>
+            <div className="text-slate-400 text-xs mt-1">{fMeta.advice}</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 pt-3 border-t border-slate-100">
+          <div className="w-24 shrink-0 flex flex-col items-center justify-center gap-1 rounded-xl py-3"
+            style={{ background: `${sMeta.color}18`, border: `1px solid ${sMeta.color}55` }}>
+            <Waves size={20} style={{ color: sMeta.color }} />
+            <span className="text-sm font-black" style={{ color: sMeta.color }}>{sMeta.word}</span>
+          </div>
+          <div className="flex-1">
+            <div className="text-slate-800 font-extrabold text-sm">
+              Storm surge{surge.level !== 'none' && exposure !== 'none' ? ` · ${surge.band}` : ''}
+            </div>
+            <div className="text-slate-500 text-sm mt-0.5">
+              {exposure === 'none' ? 'Inland — no coastal surge risk'
+                : surge.level === 'none' ? 'No significant surge expected'
+                : `Surge up to ${surge.band} possible on exposed coast`}
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="text-[10px] italic text-slate-400 mt-3 leading-snug">
+        Risk index from forecast rainfall × local flood susceptibility (PAGASA thresholds). Not a surveyed flood map.
+      </p>
     </Panel>
   )
 }

@@ -4,14 +4,21 @@ import { Ionicons } from '@expo/vector-icons'
 import Svg, { Circle } from 'react-native-svg'
 import { ScreenHeader } from '../../components/ScreenHeader'
 import { CityPicker } from '../../components/CityPicker'
+import { BarangayPicker } from '../../components/BarangayPicker'
 import { Loading, ErrorNote, SectionLabel } from '../../components/ui'
 import { useStormData } from '../../hooks/useStormData'
 import { useLocation } from '../../hooks/useLocation'
 import { fetchMultiModel } from '../../lib/api'
+import { fetchWeatherGrid, type WeatherGrid } from '../../lib/weather'
 import { computeImpact, mostThreatening, riskMeta, type Impact, type ModelLite } from '../../lib/impact'
 import { prepTimeline, type PrepItem } from '../../lib/prep'
+import { rainAccum, floodPotential, floodMeta } from '../../lib/flood'
+import { surgeRisk, surgeMeta } from '../../lib/surge'
+import { nearestBarangay, susceptibilityAt, coastalExposureAt, type HazardArea } from '../../lib/hazard'
 import { colors, space, font, radius } from '../../lib/theme'
 import type { TrackPoint } from '../../lib/types'
+
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function MyAreaScreen() {
   const { city, setCity } = useLocation()
@@ -20,6 +27,27 @@ export default function MyAreaScreen() {
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [refreshing, setRefreshing] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [bgyPickerOpen, setBgyPickerOpen] = useState(false)
+  const [barangay, setBarangay] = useState<HazardArea | null>(null)
+  const [weatherGrid, setWeatherGrid] = useState<WeatherGrid | null>(null)
+
+  // Barangay-level detail for Naga; other cities resolve from the hazard zones.
+  const isNaga = city.name === 'Naga'
+  const bgy = isNaga ? (barangay ?? nearestBarangay(city.lat, city.lon)) : null
+  const loc = bgy ? { lat: bgy.lat, lon: bgy.lon } : { lat: city.lat, lon: city.lon }
+  const susceptibility = bgy ? bgy.floodSusceptibility : susceptibilityAt(city.lat, city.lon)
+  const exposure = bgy ? bgy.coastalExposure : coastalExposureAt(city.lat, city.lon)
+  const areaLabel = bgy ? `${bgy.name}, Naga` : city.name
+
+  // Reset the barangay selection when the city changes away from Naga.
+  useEffect(() => { if (!isNaga) setBarangay(null) }, [isNaga])
+
+  // Fetch the rainfall grid once (cached 30 min server-side) for flood risk.
+  useEffect(() => {
+    let alive = true
+    fetchWeatherGrid().then(g => { if (alive) setWeatherGrid(g) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
 
   async function evaluate(manual = false) {
     manual ? setRefreshing(true) : setState('loading')
@@ -62,6 +90,14 @@ export default function MyAreaScreen() {
       <ScrollView contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => evaluate(true)} tintColor={colors.primary} />}>
 
+        {isNaga && (
+          <Pressable style={styles.bgyChip} onPress={() => setBgyPickerOpen(true)}>
+            <Ionicons name="home" size={13} color={colors.primary} />
+            <Text style={styles.bgyChipText} numberOfLines={1}>Barangay: {bgy?.name}</Text>
+            <Ionicons name="chevron-down" size={13} color={colors.textMuted} />
+          </Pressable>
+        )}
+
         {state === 'loading' && !impact && <Loading label={`Checking storms near ${city.name}…`} />}
         {state === 'error' && <ErrorNote message={`Couldn't load the forecast for ${city.name}. Pull to retry.`} />}
 
@@ -75,9 +111,13 @@ export default function MyAreaScreen() {
               <ModelAgreement impact={impact} />
             </>
           )}
+
+        <FloodSurgeCard grid={weatherGrid} lat={loc.lat} lon={loc.lon}
+          susceptibility={susceptibility} exposure={exposure} impact={impact} areaLabel={areaLabel} />
       </ScrollView>
 
       <CityPicker visible={pickerOpen} current={city} onSelect={setCity} onClose={() => setPickerOpen(false)} />
+      <BarangayPicker visible={bgyPickerOpen} current={bgy} onSelect={setBarangay} onClose={() => setBgyPickerOpen(false)} />
     </View>
   )
 }
@@ -210,8 +250,90 @@ function CalmCard({ city, hasStorms, closest }: { city: string; hasStorms: boole
   )
 }
 
+// ── Flood & storm-surge risk for the selected area ──────────────────
+function FloodSurgeCard({ grid, lat, lon, susceptibility, exposure, impact, areaLabel }: {
+  grid: WeatherGrid | null; lat: number; lon: number; susceptibility: number
+  exposure: 'none' | 'bay' | 'open'; impact: Impact | null; areaLabel: string
+}) {
+  if (!grid) return null
+
+  // Peak 24-hour rainfall over the 7-day forecast at this location.
+  const hours = Math.min(grid.n_hours ?? 168, 168)
+  let peakMm = 0, peakDay = 0
+  for (let d = 0; d < 7; d++) {
+    const s = d * 24
+    if (s >= hours) break
+    const mm = rainAccum(grid.points, lat, lon, s, Math.min(s + 24, hours))
+    if (mm > peakMm) { peakMm = mm; peakDay = d }
+  }
+  const flood = floodPotential(peakMm, susceptibility)
+  const fMeta = floodMeta(flood.level)
+  const dayDate = new Date(Date.now() + peakDay * 86400000)
+  const dayLabel = peakDay === 0 ? 'today' : peakDay === 1 ? 'tomorrow' : DOW[dayDate.getDay()]
+
+  const surge = surgeRisk(impact?.expectedWindKt ?? 0, impact?.closestKm ?? 9999, impact?.etaEarliest ?? null, exposure)
+  const sMeta = surgeMeta(surge.level)
+
+  return (
+    <View style={{ gap: space.sm }}>
+      <SectionLabel>Flood & surge risk</SectionLabel>
+      <View style={styles.floodCard}>
+        <View style={styles.floodRow}>
+          <View style={[styles.floodBadge, { backgroundColor: `${fMeta.color}22`, borderColor: `${fMeta.color}66` }]}>
+            <Ionicons name="water" size={17} color={fMeta.color} />
+            <Text style={[styles.floodWord, { color: fMeta.color }]}>{fMeta.word}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.floodTitle}>Flood potential · {areaLabel}</Text>
+            <Text style={styles.floodDetail}>
+              {peakMm >= 1 ? `${flood.rainMm} mm/24h forecast ${dayLabel}` : 'Little rain forecast this week'}
+            </Text>
+            <Text style={styles.floodAdvice}>{fMeta.advice}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.floodRow, styles.surgeRow]}>
+          <View style={[styles.floodBadge, { backgroundColor: `${sMeta.color}22`, borderColor: `${sMeta.color}66` }]}>
+            <Ionicons name="warning" size={17} color={sMeta.color} />
+            <Text style={[styles.floodWord, { color: sMeta.color }]}>{sMeta.word}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.floodTitle}>Storm surge{surge.level !== 'none' && exposure !== 'none' ? ` · ${surge.band}` : ''}</Text>
+            <Text style={styles.floodDetail}>
+              {exposure === 'none' ? 'Inland — no coastal surge risk'
+                : surge.level === 'none' ? 'No significant surge expected'
+                : `Surge up to ${surge.band} possible on exposed coast`}
+            </Text>
+          </View>
+        </View>
+      </View>
+      <Text style={styles.disclaimer}>
+        Risk index from forecast rainfall × local flood susceptibility (PAGASA thresholds). Not a surveyed flood map.
+      </Text>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   content: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl },
+  bgyChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
+    backgroundColor: colors.primarySoft, borderColor: `${colors.primary}55`, borderWidth: 1,
+    borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 7,
+  },
+  bgyChipText: { color: colors.text, fontSize: font.small, fontWeight: '800' },
+  floodCard: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: radius.lg, padding: space.md, gap: space.md },
+  floodRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  surgeRow: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.md },
+  floodBadge: {
+    width: 74, alignItems: 'center', justifyContent: 'center', gap: 2,
+    borderWidth: 1, borderRadius: radius.md, paddingVertical: space.sm,
+  },
+  floodWord: { fontSize: font.small, fontWeight: '900' },
+  floodTitle: { color: colors.text, fontSize: font.body, fontWeight: '800' },
+  floodDetail: { color: colors.textSoft, fontSize: font.small, marginTop: 2, lineHeight: 17 },
+  floodAdvice: { color: colors.textMuted, fontSize: font.tiny, marginTop: 3, lineHeight: 15 },
+  disclaimer: { color: colors.textMuted, fontSize: 9.5, lineHeight: 13, fontStyle: 'italic' },
   cityChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 150,
     backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1,

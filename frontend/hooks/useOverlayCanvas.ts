@@ -3,9 +3,10 @@ import type { GridPoint, SeasonalOutlook } from '@/lib/types'
 import type { LayerType } from '@/lib/types'
 import type { Map as LMap } from 'leaflet'
 import {
-  tempColor, heatColor, waveColor, precipColor, seasonColor, thunderColor,
+  tempColor, heatColor, waveColor, precipColor, seasonColor, thunderColor, floodColor,
   drawSmoothField,
 } from '@/lib/colors'
+import { susceptibilityAt } from '@/lib/hazard'
 
 // ── IDW interpolation from sparse grid to any lat/lon ─────────
 const MAX_IDW_D2 = 6.25   // ~2.5 deg radius — beyond this, return null (no extrapolation)
@@ -57,6 +58,14 @@ function buildViewGrid(
       const r = p.precip ?? 0
       const idx = Math.min(100, c * 0.6 + r * 18)
       return idx >= 18 ? idx : null   // skip low-instability areas
+    }
+    if (layer === 'flood') {
+      // Rainfall intensity × local flood susceptibility → 0–100 risk score.
+      const r = p.precip ?? 0
+      const susc = susceptibilityAt(p.lat, p.lon)
+      const rs = Math.max(0, Math.min(1, r / 25))                 // ~25 mm/h = heavy
+      const v = Math.max(0, Math.min(1, rs * (0.55 + 0.9 * susc))) * 100
+      return v >= 6 ? v : null
     }
     return null
   }
@@ -145,6 +154,7 @@ export function useOverlayCanvas(
     else if (layer === 'wave')    colorFn = waveColor
     else if (layer === 'rain')    colorFn = precipColor
     else if (layer === 'thunder') colorFn = thunderColor
+    else if (layer === 'flood')   colorFn = floodColor
 
     drawSmoothField(canvas, mapped, colorFn, { radius: radius * 0.8, blurPx: 18 })
   }, [layer, gridPoints, seasonalData, mapRef])

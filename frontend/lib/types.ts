@@ -3,7 +3,7 @@ import type { ForecastModelId } from './forecastModels'
 // ── Enumerations ──────────────────────────────────────────
 export type LayerType =
   | 'wind' | 'rain' | 'temp' | 'heat' | 'cloud' | 'wave' | 'seasonal' | 'satellite'
-  | 'hurricane' | 'thunder'
+  | 'hurricane' | 'thunder' | 'flood'
 
 export type MapTheme  = 'satellite' | 'terrain' | 'dark'
 export type AppMode   = 'idle' | 'historical' | 'forecast'

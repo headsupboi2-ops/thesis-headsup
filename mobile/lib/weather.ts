@@ -7,6 +7,7 @@ export interface WeatherPoint {
   idx: number; lat: number; lon: number
   temp: number[]; heat: number[]; precip: number[]
   wind_speed: number[]; wind_dir: number[]; cloud: number[]
+  flood_susc?: number   // client-attached flood susceptibility (0–1) for the Flood layer
 }
 export interface WeatherGrid {
   nx: number; ny: number; n_hours: number; step_hours: number
