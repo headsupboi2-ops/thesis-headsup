@@ -31,6 +31,7 @@ full_grid_cache = {}   # stores complete 7-day hourly grid, refreshed every 30 m
 live_storms_cache = {'storms': [], 'source': 'loading', 'fetched_at': None}
 marine_full_grid_cache = {}
 daily_forecast_cache = {}   # per-location 7-day daily summary, refreshed every 30 min
+tide_cache = {}   # per-station 7-day hourly sea level, refreshed every 30 min
 _live_storms_lock = threading.Lock()
 
 def get_resource_path(relative_path):
@@ -1530,6 +1531,7 @@ def get_full_weather_grid():
             )
             resp.raise_for_status()
             h = resp.json().get('hourly', {})
+            times = h.get('time', [])
             return {
                 'idx':        idx, 'lat': lat, 'lon': lon,
                 'temp':       h.get('temperature_2m',      []),
@@ -1538,12 +1540,14 @@ def get_full_weather_grid():
                 'wind_speed': h.get('wind_speed_10m',       []),
                 'wind_dir':   h.get('wind_direction_10m',   []),
                 'cloud':      h.get('cloud_cover',          []),
+                '_time0':     times[0] if times else None,
             }
         except Exception:
             return {
                 'idx': idx, 'lat': lat, 'lon': lon,
                 'temp': [], 'heat': [], 'precip': [],
                 'wind_speed': [], 'wind_dir': [], 'cloud': [],
+                '_time0': None,
             }
 
     results = []
@@ -1558,6 +1562,15 @@ def get_full_weather_grid():
 
     results.sort(key=lambda x: x['idx'])
 
+    # Index 0 of every hourly array is Open-Meteo's first sample — today 00:00 UTC,
+    # NOT "now". Clients need this anchor to map an array index to a wall clock;
+    # without it a tide time can sit up to 24 h away from the rain hour it belongs to.
+    start_utc = next((r['_time0'] for r in results if r.get('_time0')), None)
+    for r in results:
+        r.pop('_time0', None)
+    if start_utc and not start_utc.endswith('Z'):
+        start_utc += 'Z'
+
     payload = {
         'status':           'success',
         'provider':         'open-meteo',
@@ -1566,6 +1579,7 @@ def get_full_weather_grid():
         'ny':               ny,
         'n_hours':          168,
         'step_hours':       1,
+        'start_utc':        start_utc,
         'generated_at_utc': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
         'points':           results,
     }
@@ -1733,6 +1747,125 @@ def get_marine_full_grid():
     }
     marine_full_grid_cache.clear()
     marine_full_grid_cache[cache_key] = payload
+    return jsonify(payload)
+
+
+# Tidal boundary for the Bicol River system that drains Naga City. Naga itself is
+# ~20 km inland, so it has no tide of its own — its river level is backed up by
+# the tide at the bay mouth. Sea level is fetched here and the CLIENT applies it
+# to a barangay according to that barangay's tidal influence.
+SAN_MIGUEL_BAY = {'name': 'San Miguel Bay', 'lat': 13.85, 'lon': 123.30}
+
+
+def _tide_extremes(heights, start_dt):
+    """
+    Turning points of an hourly sea-level series.
+
+    An hourly sample almost never lands exactly on the turn, so each extreme is
+    refined by fitting a parabola through the three samples around it. Without
+    this a 21:12 high tide reports as 21:00 and the tide markers drift off the
+    rain bars they are meant to line up with.
+    """
+    out = []
+    for i in range(1, len(heights) - 1):
+        prev, cur, nxt = heights[i - 1], heights[i], heights[i + 1]
+        if prev is None or cur is None or nxt is None:
+            continue
+        is_high = cur >= prev and cur >= nxt and (cur > prev or cur > nxt)
+        is_low  = cur <= prev and cur <= nxt and (cur < prev or cur < nxt)
+        if not (is_high or is_low):
+            continue
+
+        # Vertex of the parabola through (-1, prev), (0, cur), (1, nxt).
+        denom = prev - 2 * cur + nxt
+        shift = 0.0 if abs(denom) < 1e-9 else 0.5 * (prev - nxt) / denom
+        shift = max(-0.5, min(0.5, shift))          # stay inside this sample's hour
+        height = cur - 0.25 * (prev - nxt) * shift
+
+        kind = 'high' if is_high else 'low'
+
+        # A turn that lands between two samples makes BOTH of them qualify (the
+        # series plateaus across the peak), which would draw one high tide twice.
+        # Consecutive same-type hits are one tide: collapse them to their centre.
+        if out and out[-1]['type'] == kind and i - out[-1]['hour_index'] <= 2:
+            prior = out[-1]
+            prior['hour_exact'] = round((prior['hour_exact'] + i + shift) / 2, 3)
+            prior['hour_index'] = int(round(prior['hour_exact']))
+            prior['height_m'] = round(max(prior['height_m'], height) if kind == 'high'
+                                      else min(prior['height_m'], height), 3)
+            prior['time_utc'] = (start_dt + timedelta(hours=prior['hour_exact'])
+                                 ).strftime('%Y-%m-%dT%H:%M:%SZ')
+            continue
+
+        out.append({
+            'hour_index': i,
+            'hour_exact': round(i + shift, 3),
+            'time_utc':   (start_dt + timedelta(hours=i + shift)).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'height_m':   round(height, 3),
+            'type':       kind,
+        })
+    return out
+
+
+@app.route('/api/weather/tides', methods=['GET'])
+def get_tides():
+    """
+    7-day hourly sea level (tide) for one station, on the SAME hourly index axis
+    as /api/weather/fullgrid, so index h means the same instant in both.
+    Returns the raw heights plus the computed high/low turning points.
+    Cached for 30 minutes (same bucket strategy as the grid routes).
+    """
+    lat = request.args.get('lat', SAN_MIGUEL_BAY['lat'], type=float)
+    lon = request.args.get('lon', SAN_MIGUEL_BAY['lon'], type=float)
+    days = max(1, min(7, request.args.get('days', 7, type=int)))
+
+    now_bucket = int(datetime.utcnow().timestamp() // 1800)
+    cache_key = f"tide_{lat}_{lon}_{days}_{now_bucket}"
+    cached = tide_cache.get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
+    try:
+        resp = requests.get(
+            'https://marine-api.open-meteo.com/v1/marine',
+            params={
+                'latitude':      lat,
+                'longitude':     lon,
+                'hourly':        'sea_level_height_msl',
+                'forecast_days': days,
+                'timezone':      'UTC',
+            },
+            timeout=12,
+        )
+        resp.raise_for_status()
+        hourly = resp.json().get('hourly', {})
+    except Exception as e:
+        return jsonify({'error': f'Tide fetch failed: {e}'}), 502
+
+    heights = hourly.get('sea_level_height_msl', []) or []
+    times   = hourly.get('time', []) or []
+    if not heights or not times:
+        return jsonify({'error': 'Tide provider returned no data'}), 502
+
+    start_utc = times[0] if times[0].endswith('Z') else times[0] + 'Z'
+    start_dt  = datetime.strptime(times[0][:16], '%Y-%m-%dT%H:%M')
+
+    valid = [h for h in heights if h is not None]
+    payload = {
+        'status':           'success',
+        'provider':         'open-meteo-marine',
+        'station':          {'name': SAN_MIGUEL_BAY['name'], 'lat': lat, 'lon': lon},
+        'n_hours':          len(heights),
+        'step_hours':       1,
+        'start_utc':        start_utc,
+        'generated_at_utc': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'min_m':            round(min(valid), 3) if valid else 0.0,
+        'max_m':            round(max(valid), 3) if valid else 0.0,
+        'heights':          heights,
+        'extremes':         _tide_extremes(heights, start_dt),
+    }
+    tide_cache.clear()
+    tide_cache[cache_key] = payload
     return jsonify(payload)
 
 

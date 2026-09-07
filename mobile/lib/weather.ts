@@ -11,6 +11,11 @@ export interface WeatherPoint {
 }
 export interface WeatherGrid {
   nx: number; ny: number; n_hours: number; step_hours: number
+  /** Instant of index 0 in every hourly array. Open-Meteo starts the series at
+   *  00:00 UTC of the current UTC day, NOT at "now", so this anchor is what maps
+   *  an array index to a wall clock — and what lets the rain grid and the tide
+   *  series line up despite coming from different providers. */
+  start_utc?: string
   generated_at_utc: string; points: WeatherPoint[]
 }
 export interface MarinePoint { idx: number; lat: number; lon: number; wave_height: number[]; wave_dir: number[] }

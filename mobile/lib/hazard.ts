@@ -17,6 +17,13 @@ export interface HazardArea {
   lat: number
   lon: number
   floodSusceptibility: number     // 0 (rain runs off) … 1 (floods readily)
+  /** How much the San Miguel Bay tide backs water up into this barangay.
+   *  0 = none (upland — a tide cannot push water uphill), 1 = fully tide-locked
+   *  (on the tidal reach of the Naga/Bicol river). Distinct from
+   *  `floodSusceptibility`: a barangay can flood readily from rain alone and
+   *  still be beyond the tide's reach. Drives the tide term in the 24 h
+   *  flood-risk timeline — see lib/flood.ts `tideFactor`. */
+  tidalInfluence: number
   coastalExposure: CoastalExposure
   note?: string
   source?: string                 // official hazard-map citation, once grounded
@@ -26,33 +33,38 @@ export interface HazardArea {
 // coastal-surge exposure is 'none' — its flood story is RIVERINE, driven by the
 // Naga River and the wider Bicol River basin. Central/western low-lying and
 // riverside barangays flood first; the eastern Mt-Isarog uplands shed water.
+// `tidalInfluence` follows the tidal reach UPSTREAM from San Miguel Bay: the
+// Bicol/Naga river channel and its immediate banks feel the tide most, the city
+// core less, and the Mt-Isarog side not at all. It falls off faster than
+// `floodSusceptibility` because tide propagates along the channel, not across
+// the floodplain.
 export const NAGA_BARANGAYS: HazardArea[] = [
-  { name: 'Tabuco',              lat: 13.618, lon: 123.178, floodSusceptibility: 0.90, coastalExposure: 'none', note: 'Naga riverbank — floods first' },
-  { name: 'Triangulo',           lat: 13.626, lon: 123.188, floodSusceptibility: 0.90, coastalExposure: 'none', note: 'Low-lying, chronic flooding' },
-  { name: 'Mabolo',              lat: 13.615, lon: 123.180, floodSusceptibility: 0.85, coastalExposure: 'none', note: 'Riverside, low-lying' },
-  { name: 'Sabang',              lat: 13.617, lon: 123.183, floodSusceptibility: 0.85, coastalExposure: 'none', note: 'Riverside' },
-  { name: 'Dinaga',              lat: 13.620, lon: 123.182, floodSusceptibility: 0.85, coastalExposure: 'none', note: 'Riverbank, city core' },
-  { name: 'Santa Cruz',          lat: 13.616, lon: 123.185, floodSusceptibility: 0.80, coastalExposure: 'none', note: 'South-central, low-lying' },
-  { name: 'Igualdad Interior',   lat: 13.621, lon: 123.184, floodSusceptibility: 0.80, coastalExposure: 'none' },
-  { name: 'Lerma',               lat: 13.619, lon: 123.186, floodSusceptibility: 0.80, coastalExposure: 'none' },
-  { name: 'Tinago',              lat: 13.620, lon: 123.190, floodSusceptibility: 0.80, coastalExposure: 'none' },
-  { name: 'Abella',              lat: 13.622, lon: 123.185, floodSusceptibility: 0.78, coastalExposure: 'none' },
-  { name: 'Del Rosario',         lat: 13.640, lon: 123.175, floodSusceptibility: 0.78, coastalExposure: 'none', note: 'Near Bicol River' },
-  { name: 'Bagumbayan Sur',      lat: 13.620, lon: 123.188, floodSusceptibility: 0.75, coastalExposure: 'none' },
-  { name: 'San Francisco',       lat: 13.622, lon: 123.186, floodSusceptibility: 0.75, coastalExposure: 'none' },
-  { name: 'Calauag',             lat: 13.628, lon: 123.175, floodSusceptibility: 0.72, coastalExposure: 'none' },
-  { name: 'Bagumbayan Norte',    lat: 13.625, lon: 123.190, floodSusceptibility: 0.70, coastalExposure: 'none' },
-  { name: 'Dayangdang',          lat: 13.624, lon: 123.192, floodSusceptibility: 0.70, coastalExposure: 'none' },
-  { name: 'Liboton',             lat: 13.623, lon: 123.188, floodSusceptibility: 0.70, coastalExposure: 'none' },
-  { name: 'Peñafrancia',         lat: 13.626, lon: 123.195, floodSusceptibility: 0.68, coastalExposure: 'none' },
-  { name: 'Concepcion Pequeña',  lat: 13.628, lon: 123.198, floodSusceptibility: 0.55, coastalExposure: 'none' },
-  { name: 'Balatas',             lat: 13.635, lon: 123.205, floodSusceptibility: 0.50, coastalExposure: 'none' },
-  { name: 'Concepcion Grande',   lat: 13.630, lon: 123.210, floodSusceptibility: 0.45, coastalExposure: 'none' },
-  { name: 'San Felipe',          lat: 13.638, lon: 123.220, floodSusceptibility: 0.40, coastalExposure: 'none' },
-  { name: 'Cararayan',           lat: 13.650, lon: 123.230, floodSusceptibility: 0.28, coastalExposure: 'none', note: 'Higher ground, east' },
-  { name: 'Pacol',               lat: 13.640, lon: 123.245, floodSusceptibility: 0.22, coastalExposure: 'none', note: 'Upland east' },
-  { name: 'Carolina',            lat: 13.660, lon: 123.260, floodSusceptibility: 0.15, coastalExposure: 'none', note: 'Mt Isarog foothills' },
-  { name: 'Panicuason',          lat: 13.665, lon: 123.280, floodSusceptibility: 0.10, coastalExposure: 'none', note: 'Mt Isarog slopes — sheds water' },
+  { name: 'Tabuco',              lat: 13.618, lon: 123.178, floodSusceptibility: 0.90, tidalInfluence: 0.90, coastalExposure: 'none', note: 'Naga riverbank — floods first' },
+  { name: 'Triangulo',           lat: 13.626, lon: 123.188, floodSusceptibility: 0.90, tidalInfluence: 0.85, coastalExposure: 'none', note: 'Low-lying, chronic flooding' },
+  { name: 'Mabolo',              lat: 13.615, lon: 123.180, floodSusceptibility: 0.85, tidalInfluence: 0.85, coastalExposure: 'none', note: 'Riverside, low-lying' },
+  { name: 'Sabang',              lat: 13.617, lon: 123.183, floodSusceptibility: 0.85, tidalInfluence: 0.85, coastalExposure: 'none', note: 'Riverside' },
+  { name: 'Dinaga',              lat: 13.620, lon: 123.182, floodSusceptibility: 0.85, tidalInfluence: 0.85, coastalExposure: 'none', note: 'Riverbank, city core' },
+  { name: 'Santa Cruz',          lat: 13.616, lon: 123.185, floodSusceptibility: 0.80, tidalInfluence: 0.75, coastalExposure: 'none', note: 'South-central, low-lying' },
+  { name: 'Igualdad Interior',   lat: 13.621, lon: 123.184, floodSusceptibility: 0.80, tidalInfluence: 0.70, coastalExposure: 'none' },
+  { name: 'Lerma',               lat: 13.619, lon: 123.186, floodSusceptibility: 0.80, tidalInfluence: 0.70, coastalExposure: 'none' },
+  { name: 'Tinago',              lat: 13.620, lon: 123.190, floodSusceptibility: 0.80, tidalInfluence: 0.70, coastalExposure: 'none' },
+  { name: 'Abella',              lat: 13.622, lon: 123.185, floodSusceptibility: 0.78, tidalInfluence: 0.65, coastalExposure: 'none' },
+  { name: 'Del Rosario',         lat: 13.640, lon: 123.175, floodSusceptibility: 0.78, tidalInfluence: 0.80, coastalExposure: 'none', note: 'Near Bicol River — closest to the bay' },
+  { name: 'Bagumbayan Sur',      lat: 13.620, lon: 123.188, floodSusceptibility: 0.75, tidalInfluence: 0.60, coastalExposure: 'none' },
+  { name: 'San Francisco',       lat: 13.622, lon: 123.186, floodSusceptibility: 0.75, tidalInfluence: 0.60, coastalExposure: 'none' },
+  { name: 'Calauag',             lat: 13.628, lon: 123.175, floodSusceptibility: 0.72, tidalInfluence: 0.60, coastalExposure: 'none' },
+  { name: 'Bagumbayan Norte',    lat: 13.625, lon: 123.190, floodSusceptibility: 0.70, tidalInfluence: 0.55, coastalExposure: 'none' },
+  { name: 'Dayangdang',          lat: 13.624, lon: 123.192, floodSusceptibility: 0.70, tidalInfluence: 0.50, coastalExposure: 'none' },
+  { name: 'Liboton',             lat: 13.623, lon: 123.188, floodSusceptibility: 0.70, tidalInfluence: 0.50, coastalExposure: 'none' },
+  { name: 'Peñafrancia',         lat: 13.626, lon: 123.195, floodSusceptibility: 0.68, tidalInfluence: 0.45, coastalExposure: 'none' },
+  { name: 'Concepcion Pequeña',  lat: 13.628, lon: 123.198, floodSusceptibility: 0.55, tidalInfluence: 0.35, coastalExposure: 'none' },
+  { name: 'Balatas',             lat: 13.635, lon: 123.205, floodSusceptibility: 0.50, tidalInfluence: 0.30, coastalExposure: 'none' },
+  { name: 'Concepcion Grande',   lat: 13.630, lon: 123.210, floodSusceptibility: 0.45, tidalInfluence: 0.25, coastalExposure: 'none' },
+  { name: 'San Felipe',          lat: 13.638, lon: 123.220, floodSusceptibility: 0.40, tidalInfluence: 0.20, coastalExposure: 'none' },
+  { name: 'Cararayan',           lat: 13.650, lon: 123.230, floodSusceptibility: 0.28, tidalInfluence: 0.10, coastalExposure: 'none', note: 'Higher ground, east' },
+  { name: 'Pacol',               lat: 13.640, lon: 123.245, floodSusceptibility: 0.22, tidalInfluence: 0.05, coastalExposure: 'none', note: 'Upland east' },
+  { name: 'Carolina',            lat: 13.660, lon: 123.260, floodSusceptibility: 0.15, tidalInfluence: 0.00, coastalExposure: 'none', note: 'Mt Isarog foothills' },
+  { name: 'Panicuason',          lat: 13.665, lon: 123.280, floodSusceptibility: 0.10, tidalInfluence: 0.00, coastalExposure: 'none', note: 'Mt Isarog slopes — sheds water' },
 ]
 
 /** Bounding box + centre for the Naga barangay set, used to decide when a
@@ -124,6 +136,22 @@ export function susceptibilityAt(lat: number, lon: number): number {
     num += w * z.floodSusceptibility; den += w
   }
   return den > 0 ? num / den : BASELINE_SUSCEPTIBILITY
+}
+
+/** Tidal influence (0–1) at a location, blended the same way as susceptibility
+ *  so the value moves smoothly between barangays. Zero outside Naga: the tide
+ *  model is calibrated to the San Miguel Bay → Bicol River reach only, and we
+ *  would rather apply no tide term than a fabricated one elsewhere. */
+export function tidalInfluenceAt(lat: number, lon: number): number {
+  if (!isInNaga(lat, lon)) return 0
+  let num = 0, den = 0
+  for (const b of NAGA_BARANGAYS) {
+    const d = haversineKm(lat, lon, b.lat, b.lon)
+    if (d < 0.25) return b.tidalInfluence
+    const w = 1 / (d * d)
+    num += w * b.tidalInfluence; den += w
+  }
+  return den > 0 ? num / den : 0
 }
 
 /** Coastal exposure at a location — nearest zone within range, else 'none'. */

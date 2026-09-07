@@ -11,7 +11,7 @@ import { generateWeatherGrid, generateWindGrid } from '@/lib/mockData'
 // ── Initial state ─────────────────────────────────────────
 const initialState: DashboardState = {
   activeLayer: 'wind',
-  mapTheme: 'dark',
+  mapTheme: 'terrain',   // light basemap by default
   forecastHour: 0,
   isPlaying: false,
   appMode: 'idle',
@@ -29,15 +29,12 @@ const initialState: DashboardState = {
 // ── Reducer ───────────────────────────────────────────────
 function reducer(state: DashboardState, action: DashboardAction): DashboardState {
   switch (action.type) {
-    case 'SET_LAYER': {
-      // Auto-switch map theme to match layer type
-      const darkLayers = ['rain','thunder','cloud','hurricane','wave']
-      const lightLayers = ['temp','heat','seasonal']
-      const newTheme = darkLayers.includes(action.layer) ? 'dark'
-        : lightLayers.includes(action.layer) ? 'terrain'
-        : state.mapTheme
-      return { ...state, activeLayer: action.layer, mapTheme: newTheme }
-    }
+    case 'SET_LAYER':
+      // The basemap is the user's choice and is left alone here. Changing a
+      // weather layer used to force the theme (dark for rain/thunder/cloud/
+      // wave/hurricane, light for temp/heat/seasonal), which silently undid
+      // whatever the user had picked in the Base Map switcher.
+      return { ...state, activeLayer: action.layer }
     case 'SET_MAP_THEME':
       return { ...state, mapTheme: action.theme }
     case 'SET_FORECAST_HOUR':

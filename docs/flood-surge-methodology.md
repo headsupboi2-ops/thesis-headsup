@@ -56,6 +56,65 @@ cell's susceptibility, scored 0–100; on web it uses instantaneous rainfall
 intensity × susceptibility (the web grid carries the current-hour value rather
 than the full hourly array). Both are the same index, sampled differently.
 
+## 2b. Tide modulation and the 24-hour timeline (My Area, web)
+
+Naga sits ~20 km inland and has no tide of its own. What it has is *backwater*:
+the Bicol/Naga river drains into San Miguel Bay, and when the bay is at high
+water the river cannot discharge, so the same rainfall stands longer and floods
+worse. The 24-hour timeline on the My Area page models exactly that and nothing
+more.
+
+**Chain.** For each of the next 24 hours *h*:
+
+```
+rain(h)  = rolling 24 h accumulation of the SAME hourly precipitation the
+           Rain Radar layer draws, sampled by IDW at the barangay
+base(h)  = clamp01(rain(h) / 220) × (0.55 + 0.9 × susceptibility)   [as §2]
+tide(h)  = sea level at San Miguel Bay, linear-interpolated to the hour
+norm(h)  = (tide(h) − min) / (max − min)  over the station's own 7-day range
+factor(h)= 1 + 0.25 × tidalInfluence × (2·norm(h) − 1)
+score(h) = clamp01(base(h) × factor(h))
+```
+
+**Design decisions worth defending.**
+
+- *Rainfall is the driver; the tide is only a modifier.* `factor` multiplies an
+  already rain-derived score, so dry weather at the highest tide of the year
+  still scores zero. The tide can never manufacture a flood.
+- *Accumulated, not instantaneous, rain.* Each hour is scored on its trailing
+  24 h, so risk keeps rising after a downpour ends. A 40 mm/h burst lasting
+  20 minutes does not flood the city; 15 mm/h for eight hours does. This also
+  keeps the §2 PAGASA calibration (50/100/200 mm) valid unchanged.
+- *±25 % swing (`TIDE_SWING`).* A judgement value, not a measured coefficient.
+  It is deliberately small enough that rain always dominates the ranking, and
+  large enough to separate a high-tide hour from a low-tide one. This is the
+  single most obvious sensitivity knob — vary it and report.
+- *`tidalInfluence` is separate from `floodSusceptibility`.* Tide propagates
+  *along the channel*, not across the floodplain, so it decays faster upstream.
+  A barangay can flood readily from rain and still be beyond the tide's reach.
+  Uplands (Carolina, Panicuason) are 0, giving `factor` ≡ 1 exactly.
+- *Alignment with the Rain Radar.* The timeline reads the same
+  `/api/weather/fullgrid` `precip` array, at the same hourly indices, that the
+  radar overlay paints, so the two can never disagree. Because Open-Meteo's
+  arrays begin at 00:00 UTC of the current UTC day — **not** at "now" — both
+  that endpoint and `/api/weather/tides` return `start_utc`, and every
+  index↔wall-clock and rain↔tide cross-reference goes through it.
+
+**Observed behaviour (2026-09-04, Dinaga).** Peak *rainfall* fell at 03:00
+(6.5 mm/24 h) but peak *risk* landed at 00:00 (6.1 mm/24 h) because the tide was
+1.04 m rather than 0.23 m. Switching to Panicuason (`tidalInfluence` 0) moved
+the peak back to 03:00. That contrast is the model working as intended.
+
+**Additional limitations (add to §5).**
+
+6. Tide is the predicted sea level at the *bay mouth*. The real backwater at
+   Naga lags it by roughly an hour and is attenuated by river discharge;
+   neither the lag nor the attenuation is modelled.
+7. `tidalInfluence` values are curated estimates on the same footing as
+   `floodSusceptibility` (§4) — not surveyed tidal-reach measurements.
+8. The model omits the compounding case where high river discharge and high
+   tide meet; it treats the tide as a fixed multiplier regardless of flow.
+
 ## 3. Storm-Surge Risk
 
 Surge is evaluated **only for coastal locations** (`coastalExposure` ≠ `none`).

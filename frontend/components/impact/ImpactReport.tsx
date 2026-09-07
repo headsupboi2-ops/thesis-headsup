@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, MapPin, Home, Navigation, Clock, AlertTriangle, ShieldCheck, Droplets, Waves } from 'lucide-react'
 import { fetchRealtimeStorms } from '@/lib/analytics'
@@ -8,9 +8,12 @@ import type { MultiModelResponse } from '@/lib/forecastModels'
 import { PH_CITIES, DEFAULT_CITY, type City } from '@/lib/cities'
 import { computeImpact, mostThreatening, riskMeta, type Impact, type ModelLite } from '@/lib/impact'
 import { prepTimeline } from '@/lib/prep'
-import { rainAccum, floodPotential, floodMeta, type RainPoint } from '@/lib/flood'
+import { rainAccum, floodPotential, floodMeta, floodTimeline, peakHour, type RainPoint, type FloodHour } from '@/lib/flood'
+import { FloodAlert } from './FloodAlert'
 import { surgeRisk, surgeMeta } from '@/lib/surge'
-import { NAGA_BARANGAYS, nearestBarangay, susceptibilityAt, coastalExposureAt, type HazardArea } from '@/lib/hazard'
+import { NAGA_BARANGAYS, nearestBarangay, susceptibilityAt, coastalExposureAt, tidalInfluenceAt, type HazardArea } from '@/lib/hazard'
+import { fetchTides, indexAt, msAtIndex, tideHeightAt, tideNormalised, extremesBetween, nextTides, utcMs, type TideSeries } from '@/lib/tides'
+import { FloodTimeline } from './FloodTimeline'
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -21,6 +24,8 @@ export function ImpactReport() {
   const [barangay, setBarangay] = useState<HazardArea | null>(null)
   const [rainPoints, setRainPoints] = useState<RainPoint[] | null>(null)
   const [gridHours, setGridHours] = useState(168)
+  const [gridStartUtc, setGridStartUtc] = useState<string | null>(null)
+  const [tide, setTide] = useState<TideSeries | null>(null)
 
   // Barangay-level detail for Naga; other cities resolve from the hazard zones.
   const isNaga = city.name === 'Naga'
@@ -30,7 +35,34 @@ export function ImpactReport() {
   const exposure = bgy ? bgy.coastalExposure : coastalExposureAt(city.lat, city.lon)
   const areaLabel = bgy ? `${bgy.name}, Naga` : city.name
 
+  const tidalInfluence = bgy ? bgy.tidalInfluence : tidalInfluenceAt(city.lat, city.lon)
+
   useEffect(() => { if (!isNaga) setBarangay(null) }, [isNaga])
+
+  // ── Next 24 hours, on the Rain Radar's own hour axis ──
+  // Computed here rather than inside the flood card because the rising-risk
+  // alert at the top of the page needs the same `peak` the card draws.
+  // Open-Meteo's hourly arrays begin at 00:00 UTC of the current UTC day, so
+  // index 0 is NOT "now". `start_utc` carries that anchor; the fallback
+  // reproduces the provider's own rule if an older cached payload lacks it.
+  const timeline: FloodHour[] = useMemo(() => {
+    if (!rainPoints) return []
+    const gridStart = gridStartUtc ?? new Date(new Date().setUTCHours(0, 0, 0, 0)).toISOString()
+    const nowIdx = Math.max(0, Math.min(indexAt(gridStart, Date.now()), Math.max(0, gridHours - 24)))
+    // The rain grid and the tide come from different providers and need not
+    // share a start hour, so tide is looked up by wall-clock time, not index.
+    return floodTimeline(
+      rainPoints, loc.lat, loc.lon, susceptibility, tidalInfluence, nowIdx,
+      h => msAtIndex(gridStart, h),
+      ms => {
+        if (!tide) return null
+        const heightM = tideHeightAt(tide, ms)
+        return heightM == null ? null : { heightM, norm: tideNormalised(tide, heightM) }
+      },
+    )
+  }, [rainPoints, gridStartUtc, gridHours, loc.lat, loc.lon, susceptibility, tidalInfluence, tide])
+
+  const peak = useMemo(() => peakHour(timeline), [timeline])
 
   // Rainfall grid (cached 30 min server-side) — drives the flood risk.
   useEffect(() => {
@@ -40,10 +72,22 @@ export function ImpactReport() {
         const res = await fetch(`${API_BASE}/api/weather/fullgrid?region=par`, { cache: 'no-store' })
         if (!res.ok) return
         const json = await res.json()
-        if (alive && json.points) { setRainPoints(json.points); setGridHours(Math.min(json.n_hours ?? 168, 168)) }
+        if (alive && json.points) {
+          setRainPoints(json.points)
+          setGridHours(Math.min(json.n_hours ?? 168, 168))
+          setGridStartUtc(json.start_utc ?? null)
+        }
       } catch { /* leave flood card hidden */ }
     })()
     return () => { alive = false }
+  }, [])
+
+  // Tide at San Miguel Bay — modulates the 24 h flood timeline. Optional: if it
+  // fails the timeline still renders, driven by rainfall alone.
+  useEffect(() => {
+    const ctrl = new AbortController()
+    fetchTides(ctrl.signal).then(setTide).catch(() => {})
+    return () => ctrl.abort()
   }, [])
 
   useEffect(() => {
@@ -115,6 +159,8 @@ export function ImpactReport() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 md:px-6 py-6 flex flex-col gap-5 pb-16">
+        {/* Rising flood risk — first thing on the page, above the storm hero. */}
+        <FloodAlert peak={peak} areaLabel={areaLabel} tidalInfluence={tidalInfluence} />
         {status === 'loading' && <Panel><div className="py-8 text-center text-slate-400 text-sm">Checking storms near {city.name}…</div></Panel>}
         {status === 'error' && <div className="rounded-xl px-4 py-3 text-white text-sm font-semibold" style={{ background: 'linear-gradient(90deg,#a8210e,#cc2200)' }}>⚠ Couldn&apos;t load the forecast for {city.name}. Check the backend.</div>}
 
@@ -130,7 +176,8 @@ export function ImpactReport() {
           )}
 
         <FloodSurgeCard points={rainPoints} hours={gridHours} lat={loc.lat} lon={loc.lon}
-          susceptibility={susceptibility} exposure={exposure} impact={impact} areaLabel={areaLabel} />
+          susceptibility={susceptibility} exposure={exposure} impact={impact} areaLabel={areaLabel}
+          tide={tide} tidalInfluence={tidalInfluence} timeline={timeline} peak={peak} />
       </main>
     </div>
   )
@@ -247,9 +294,12 @@ function ModelAgreement({ impact }: { impact: Impact }) {
   )
 }
 
-function FloodSurgeCard({ points, hours, lat, lon, susceptibility, exposure, impact, areaLabel }: {
+function FloodSurgeCard({ points, hours, lat, lon, susceptibility, exposure, impact, areaLabel,
+                          tide, tidalInfluence, timeline, peak }: {
   points: RainPoint[] | null; hours: number; lat: number; lon: number; susceptibility: number
   exposure: 'none' | 'bay' | 'open'; impact: Impact | null; areaLabel: string
+  tide: TideSeries | null; tidalInfluence: number
+  timeline: FloodHour[]; peak: FloodHour | null
 }) {
   if (!points) return null
 
@@ -268,6 +318,15 @@ function FloodSurgeCard({ points, hours, lat, lon, susceptibility, exposure, imp
 
   const surge = surgeRisk(impact?.expectedWindKt ?? 0, impact?.closestKm ?? 9999, impact?.etaEarliest ?? null, exposure)
   const sMeta = surgeMeta(surge.level)
+
+  // The 24 h timeline is computed by the page (ImpactReport) because the rising
+  // -risk alert at the top needs the same `peak` this card draws.
+  const windowStart = timeline.length ? timeline[0].ms : Date.now()
+  const windowEnd = windowStart + 24 * 3_600_000
+  const tideMarks = tide ? extremesBetween(tide, windowStart, windowEnd) : []
+  const upcoming = tide ? nextTides(tide, Date.now()) : { high: null, low: null }
+  const tideTime = (iso: string) =>
+    new Date(utcMs(iso)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
   return (
     <Panel>
@@ -305,9 +364,37 @@ function FloodSurgeCard({ points, hours, lat, lon, susceptibility, exposure, imp
             </div>
           </div>
         </div>
+
+        {/* Tide — why it matters here is spelled out, since Naga is inland. */}
+        {tide && (upcoming.high || upcoming.low) && (
+          <div className="flex items-center gap-4 pt-3 border-t border-slate-100">
+            <div className="w-24 shrink-0 flex flex-col items-center justify-center gap-1 rounded-xl py-3"
+              style={{ background: 'rgba(14,165,233,0.10)', border: '1px solid rgba(14,165,233,0.35)' }}>
+              <Waves size={20} style={{ color: '#0ea5e9' }} />
+              <span className="text-[11px] font-black" style={{ color: '#0ea5e9' }}>Tide</span>
+            </div>
+            <div className="flex-1">
+              <div className="text-slate-800 font-extrabold text-sm">{tide.station.name}</div>
+              <div className="text-slate-500 text-sm mt-0.5 flex gap-4 flex-wrap">
+                {upcoming.high && <span>▲ High {tideTime(upcoming.high.time_utc)} · {upcoming.high.height_m.toFixed(2)} m</span>}
+                {upcoming.low && <span>▼ Low {tideTime(upcoming.low.time_utc)} · {upcoming.low.height_m.toFixed(2)} m</span>}
+              </div>
+              <div className="text-slate-400 text-xs mt-1">
+                {tidalInfluence > 0.05
+                  ? 'A high tide holds the river up and slows drainage — the same rain floods worse.'
+                  : 'This barangay sits above the tidal reach, so the tide does not affect it.'}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {peak && <FloodTimeline hours={timeline} extremes={tideMarks} peak={peak}
+          tidalInfluence={tidalInfluence} stationName={tide ? tide.station.name : null} />}
       </div>
       <p className="text-[10px] italic text-slate-400 mt-3 leading-snug">
-        Risk index from forecast rainfall × local flood susceptibility (PAGASA thresholds). Not a surveyed flood map.
+        Risk index from forecast rainfall × local flood susceptibility (PAGASA thresholds), scaled by
+        predicted tide. Not a surveyed flood map. Tide is the sea level at the bay mouth; the real
+        backwater at Naga lags it by roughly an hour, which is not modelled.
       </p>
     </Panel>
   )
