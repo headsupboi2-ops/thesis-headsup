@@ -104,7 +104,8 @@ check('bearing 0 -> N', headingFromBearing(0) === 'N')
 check('bearing 90 -> E', headingFromBearing(90) === 'E')
 check('bearing 180 -> S', headingFromBearing(180) === 'S')
 check('bearing 270 -> W', headingFromBearing(270) === 'W')
-check('bearing 100 -> ESE', headingFromBearing(100) === 'ESE')
+check('bearing 100 -> E', headingFromBearing(100) === 'E')
+check('bearing 105 -> ESE', headingFromBearing(105) === 'ESE')
 
 // ── 3. Snapshot capture eligibility ──────────────────────────────────
 const now = new Date('2026-09-14T12:00:00Z')
@@ -801,7 +802,8 @@ check('bearing 0 -> N', headingFromBearing(0) === 'N')
 check('bearing 90 -> E', headingFromBearing(90) === 'E')
 check('bearing 180 -> S', headingFromBearing(180) === 'S')
 check('bearing 270 -> W', headingFromBearing(270) === 'W')
-check('bearing 100 -> ESE', headingFromBearing(100) === 'ESE')
+check('bearing 100 -> E', headingFromBearing(100) === 'E')
+check('bearing 105 -> ESE', headingFromBearing(105) === 'ESE')
 
 // ── 3. Snapshot capture eligibility ──────────────────────────────────
 const now = new Date('2026-09-14T12:00:00Z')
