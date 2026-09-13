@@ -6,6 +6,7 @@
 import { distanceToParKm, firstParEntryHour, isInPar } from './par'
 import { tcwsFromWind, type Tcws } from './tcws'
 import { scoreUncertainty, UNCERTAINTY_META, type UncertaintyScore } from './uncertainty'
+import type { DriftCheck } from './forecastDrift'
 import type { LiveStorm, ForecastStep, ModelTrack } from './types'
 
 export type ParAlertStatus = 'inside' | 'approaching' | 'watch'
@@ -23,6 +24,10 @@ export interface ParAlert {
   action: string                   // recommended action for people in the path
   /** How far apart the agency forecasts are — null when too few tracks to judge. */
   uncertainty: UncertaintyScore | null
+  /** How the storm's actual position compares to the forecast issued ~24h
+   *  ago — absent until useForecastDrift has a check ready, merged in by
+   *  the caller. */
+  drift?: DriftCheck | null
 }
 
 const WATCH_DISTANCE_KM = 300

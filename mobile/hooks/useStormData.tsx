@@ -7,13 +7,14 @@
 // It also hosts the DEMO SCENARIO (defense replay): while the demo is active it
 // suppresses the live poll and steps a real historical typhoon (GONI/Rolly 2020)
 // through this same pipeline, so PAR alerts + local notifications fire for real.
-import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react'
 import { fetchStorms, fetchForecast, fetchScenario, fetchMultiModel } from '../lib/api'
 import {
   getNotificationPermission, requestNotificationPermission, scheduleLocalNotification,
 } from '../lib/notifications'
 import { computeParAlerts, alertHeadline, type ParAlert } from '../lib/alerts'
 import { isInPar } from '../lib/par'
+import { useForecastDrift } from './useForecastDrift'
 import type { LiveStorm, ForecastStep, TrackPoint, ModelTrack } from '../lib/types'
 
 const POLL_MS = 10 * 60 * 1000
@@ -280,8 +281,15 @@ export function StormDataProvider({ children }: { children: ReactNode }) {
     return 'Approaching the PAR'
   })()
 
+  // ── Forecast drift — every tracked storm, not gated by PAR status ──
+  const driftByStorm = useForecastDrift(storms, modelTracks)
+  const alertsWithDrift = useMemo(
+    () => alerts.map(a => driftByStorm[a.storm] ? { ...a, drift: driftByStorm[a.storm] } : a),
+    [alerts, driftByStorm],
+  )
+
   const value: StormData = {
-    storms, forecasts, modelTracks, alerts, source, loading, refreshing, error, lastUpdated,
+    storms, forecasts, modelTracks, alerts: alertsWithDrift, source, loading, refreshing, error, lastUpdated,
     refresh: () => load(true),
     demoActive, demoLoading, demoPlaying, demoSpeed,
     demoIndex: Math.max(0, demoIndex - demoStartIdxRef.current),

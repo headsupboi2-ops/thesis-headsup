@@ -10,12 +10,19 @@ import {
   type ParAlert, type ParAlertStatus,
 } from '../../lib/alerts'
 import { UNCERTAINTY_META } from '../../lib/uncertainty'
+import type { DriftLevel } from '../../lib/forecastDrift'
 import { colors, space, font, radius, CAT_NAME } from '../../lib/theme'
 
 const STATUS_META: Record<ParAlertStatus, { color: string; icon: keyof typeof Ionicons.glyphMap; tag: string }> = {
   inside:      { color: colors.danger, icon: 'warning', tag: 'INSIDE PAR' },
   approaching: { color: colors.warn, icon: 'alert-circle', tag: 'APPROACHING' },
   watch:       { color: colors.watch, icon: 'eye', tag: 'WATCH' },
+}
+
+const DRIFT_META: Record<DriftLevel, { color: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  'on-track':    { color: colors.success, icon: 'checkmark-circle' },
+  'minor':       { color: colors.warn,    icon: 'trending-up' },
+  'significant': { color: colors.danger,  icon: 'warning' },
 }
 
 export default function AlertsScreen() {
@@ -142,6 +149,17 @@ function AlertBanner({ alert }: { alert: ParAlert }) {
           <View style={[styles.actionRow, { borderLeftColor: UNCERTAINTY_META[u.level].color }]}>
             <Ionicons name="git-network" size={13} color={UNCERTAINTY_META[u.level].color} />
             <Text style={styles.actionText}>{spreadAdvice}</Text>
+          </View>
+        )}
+
+        {/* Forecast drift: how the actual position compares to what our
+            own AI Ensemble forecast ~24h ago. Always shown once a check
+            exists — unlike the spread-advice line above, on-track is
+            itself useful information, not silence. */}
+        {alert.drift && (
+          <View style={[styles.actionRow, { borderLeftColor: DRIFT_META[alert.drift.level].color }]}>
+            <Ionicons name={DRIFT_META[alert.drift.level].icon} size={13} color={DRIFT_META[alert.drift.level].color} />
+            <Text style={styles.actionText}>{alert.drift.headline}</Text>
           </View>
         )}
       </View>
