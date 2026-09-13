@@ -141,6 +141,62 @@ alongside the existing action/advice lines — no new banner component.
 drift: DriftCheck | null
 ```
 
+## Push notification on drift transitions
+
+Added after initial approval, at the user's request — this pulls the
+"push notification on a drift transition" line back in from Out of Scope
+below.
+
+**Trigger:** once per storm, per `level` transition — fires when the
+computed level differs from the last level notified for that storm, in
+*either* direction: escalating (`on-track` → `minor` → `significant`) and
+recovering (`significant`/`minor` → `on-track`). The recovering case is
+what answers "confirm it's tracking toward the prediction again," not just
+"warn when it shifts."
+
+The first-ever check for a storm also notifies (there is no prior level to
+differ from) — consistent with the design's "always show a status once a
+check exists" wording, and it doubles as the moment a user learns the
+feature exists for that storm.
+
+**Not fired on every poll.** The check itself recomputes live every poll
+(see above), but a poll that reproduces the *same* level as last time
+notifies nobody — only a change in `level` does. Otherwise a storm sitting
+at `on-track` for days would notify every ~10 minutes.
+
+**Dedup persists across reloads.** `ParAlerts.tsx`'s existing notification
+dedup (`notifiedRef`) is a `useRef<Set<string>>` that resets on every
+mount — a page reload re-evaluates current alerts against an empty Set, so
+a status a user already saw a notification for can fire again after a
+reload. That's a real gap in the existing code, and this feature does not
+inherit it: `useForecastDrift` persists `lastNotifiedLevel` per storm
+alongside its snapshots in the same storage blob, the same way
+`useParBroadcastEngine` persists its packet log specifically so a reload
+doesn't re-fire packets already emitted.
+
+**Delivery** reuses the exact plumbing each platform already has — no new
+notification mechanism:
+
+- Web: `Notification`, gated on `Notification.permission === 'granted'`,
+  exactly as `useParBroadcastEngine` already fires one per 3-hour packet.
+  `useForecastDrift` checks permission itself; it does not depend on
+  `ParAlerts`' opt-in UI, matching how `useParBroadcastEngine` is
+  self-contained today.
+- Mobile: `scheduleLocalNotification` from `lib/notifications.ts`, exactly
+  as `useStormData.tsx` already uses for PAR escalations and Demo Scenario
+  events.
+
+**Title and body**, level-keyed:
+
+| level | Title | Body |
+|---|---|---|
+| `on-track` | "✅ Forecast holding — `<storm>`" | the existing on-track headline |
+| `minor` | "📈 Track drift — `<storm>`" | the existing minor headline |
+| `significant` | "⚠️ Track has shifted — `<storm>`" | the existing significant headline |
+
+Body text is exactly `DriftCheck.headline` — no separate notification copy
+to keep in sync with the banner line.
+
 ## Interaction with the Demo Scenario
 
 The demo replays GONI (2020) by stepping through historical points on a
@@ -165,6 +221,11 @@ of tracking.
 - A storm that disappears from `storms` between polls (dissipated): its
   snapshots simply age out via the existing 36h prune; no special-case
   cleanup needed.
+- Notification permission not granted, or the `Notification`/
+  `scheduleLocalNotification` call throws (some mobile browsers throw from
+  the constructor): the drift check and banner line are computed and shown
+  regardless — notification delivery is a side effect of an already-
+  computed result, never a precondition for showing it.
 
 ## Testing
 
@@ -176,6 +237,13 @@ heading, a snapshot outside the 18–30h tolerance window is ignored, pruning
 removes snapshots older than 36h, and corrupt persisted state is recovered
 from rather than thrown.
 
+The transition-notification logic gets its own fixtures, separate from the
+pure drift computation: two consecutive same-level checks produce no
+notification, a level change in either direction produces exactly one, a
+storm's first-ever check produces one, and `lastNotifiedLevel` read back
+after a simulated reload matches what was persisted (proving the reload
+gap in `ParAlerts.tsx`'s existing dedup is not repeated here).
+
 ## Out of scope for this pass
 
 - Map annotation (predicted-point vs. actual-point marker/arrow) — text
@@ -183,5 +251,3 @@ from rather than thrown.
   adding this later.
 - Multiple lookback checkpoints (12h/24h/48h at once) — 24h only.
 - Any backend-side storage or verification.
-- Push notification specifically on a drift transition (the existing
-  PAR-alert notification plumbing is untouched by this feature).
