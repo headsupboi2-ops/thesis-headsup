@@ -8,6 +8,7 @@ import { PAR_BOUNDARY, isInPar } from '@/lib/par'
 import { ParAlerts, computeParAlerts } from '../alerts/ParAlerts'
 import { NotificationCenter } from '../alerts/NotificationCenter'
 import { useParBroadcastEngine } from '@/hooks/useParBroadcastEngine'
+import { useForecastDrift } from '@/hooks/useForecastDrift'
 import { useDemoScenario } from '@/hooks/useDemoScenario'
 import { ModelLegend } from './ModelLegend'
 import { coneRings, buildConePolygon, scoreUncertainty, UNCERTAINTY_META } from '@/lib/uncertainty'
@@ -556,13 +557,19 @@ export function HurricaneTracker() {
   const { log: broadcastLog, toast: broadcastToast, dismissToast, clearLog, latestHeadlines } =
     useParBroadcastEngine(storms, modelTracks, parAlerts)
 
-  // The crimson banner text follows the newest 3-hour snapshot
+  // ── Forecast drift — every tracked storm, not gated by PAR status ──
+  const driftByStorm = useForecastDrift(storms, modelTracks)
+
+  // The crimson banner text follows the newest 3-hour snapshot; the drift
+  // line is merged in the same way, independently of PAR status.
   const alertsWithHeadlines = useMemo(
-    () => parAlerts.map(a =>
-      a.status === 'inside' && latestHeadlines[a.storm]
-        ? { ...a, headline: latestHeadlines[a.storm] }
-        : a),
-    [parAlerts, latestHeadlines],
+    () => parAlerts.map(a => {
+      let next = a
+      if (a.status === 'inside' && latestHeadlines[a.storm]) next = { ...next, headline: latestHeadlines[a.storm] }
+      if (driftByStorm[a.storm]) next = { ...next, drift: driftByStorm[a.storm] }
+      return next
+    }),
+    [parAlerts, latestHeadlines, driftByStorm],
   )
 
   // ── Auto-archive every storm that approaches or enters the PAR ──

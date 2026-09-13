@@ -4,6 +4,7 @@ import { distanceToParKm, firstParEntryHour, isInPar } from '@/lib/par'
 import { tcwsFromWind, type Tcws } from '@/lib/tcws'
 import type { ModelTrack } from '@/lib/forecastModels'
 import { scoreUncertainty, UNCERTAINTY_META, type UncertaintyScore } from '@/lib/uncertainty'
+import type { DriftCheck, DriftLevel } from '@/lib/forecastDrift'
 
 // ── Alert model ─────────────────────────────────────────────────────
 export type ParAlertStatus = 'inside' | 'approaching' | 'watch'
@@ -24,6 +25,10 @@ export interface ParAlert {
   uncertainty: UncertaintyScore | null
   /** Optional override — the 3-hour broadcast engine swaps in the latest snapshot text. */
   headline?: string
+  /** How the storm's actual position compares to the forecast issued ~24h
+   *  ago — absent until useForecastDrift has a check ready, merged in by
+   *  the caller exactly like `headline` is. */
+  drift?: DriftCheck | null
 }
 
 /** How far outside the boundary a storm can be and still raise a 'watch'. */
@@ -144,6 +149,17 @@ const STYLE: Record<ParAlertStatus, { bg: string; icon: string; shadow: string }
   inside:      { bg: 'linear-gradient(90deg,#a80000,#e11900)', icon: '🌀', shadow: '0 4px 18px rgba(220,0,0,0.55)' },
   approaching: { bg: 'linear-gradient(90deg,#cc4400,#ff7a00)', icon: '⚠️', shadow: '0 4px 16px rgba(230,110,0,0.45)' },
   watch:       { bg: 'linear-gradient(90deg,#9a7b00,#c9a400)', icon: '👁', shadow: '0 4px 14px rgba(190,150,0,0.4)' },
+}
+
+const DRIFT_COLOR: Record<DriftLevel, string> = {
+  'on-track':    '#34C759',
+  'minor':       '#FF9500',
+  'significant': '#FF3B30',
+}
+const DRIFT_ICON: Record<DriftLevel, string> = {
+  'on-track':    '📍',
+  'minor':       '📈',
+  'significant': '⚠️',
 }
 
 function fmtEta(h: number) {
@@ -271,6 +287,16 @@ export function ParAlerts({ alerts, top = 92 }: { alerts: ParAlert[]; top?: numb
               <div className="flex items-center gap-1.5 mt-1 text-[11px]"
                 style={{ color: 'rgba(255,255,255,0.92)' }}>
                 <span>🎯</span><span>{UNCERTAINTY_META[a.uncertainty.level].advice}</span>
+              </div>
+            )}
+            {/* Forecast drift: how the actual position compares to what our
+                own AI Ensemble forecast ~24h ago. Always shown once a check
+                exists — unlike the spread-advice line, on-track is itself
+                useful information, not silence. */}
+            {a.drift && (
+              <div className="flex items-center gap-1.5 mt-1 text-[11px]"
+                style={{ color: DRIFT_COLOR[a.drift.level] }}>
+                <span>{DRIFT_ICON[a.drift.level]}</span><span>{a.drift.headline}</span>
               </div>
             )}
           </div>
