@@ -1,14 +1,20 @@
 {
-  "experimentalServices": {
+  "services": {
     "frontend": {
-      "root": "frontend",
-      "routePrefix": "/",
-      "framework": "nextjs"
+      "root": "frontend"
     },
     "backend": {
       "root": "backend",
-      "routePrefix": "/_/backend",
-      "entrypoint": "app.py"
+      "entrypoint": "app:app",
+      "functions": {
+        "app.py": {
+          "excludeFiles": "{models/**,__pycache__/**,scripts/typhoon_scraper_deprecated.py,scripts/train_lstm.py,scripts/backtest.py,*.bat,*.sh,*.spec,README*.md,requirements_local.txt,requirements_web.txt}"
+        }
+      }
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
 }

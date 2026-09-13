@@ -1,11 +1,17 @@
 # Vercel-compatible dependencies (no TensorFlow — physics fallback mode is used)
 # For local dev with full ML models, use requirements_local.txt instead.
+#
+# pandas is deliberately NOT listed: it is unused by app.py and every module it
+# actually imports (ai_models.py, multi_model_tracks.py, typhoon_scraper.py) —
+# only scripts/backtest.py and scripts/train_lstm.py use it, and those are
+# offline tools that never run on Vercel. Its manylinux wheel was the single
+# biggest contributor to the Python function exceeding the 500 MB bundle limit.
+# If a live endpoint ever needs it, add it back deliberately.
 Flask>=2.3,<4
 Werkzeug>=2.3,<4
 flask-cors>=4,<7
 requests>=2.31,<3
 beautifulsoup4>=4.12,<5
 numpy>=1.24,<2
-pandas>=2.0,<3
 python-dateutil>=2.9,<3
 pytz>=2024.1

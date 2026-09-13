@@ -48,8 +48,12 @@ export const MAP_TILES: Record<MapTheme, { url: string; attr: string; maxZoom: n
     attr: '© Esri', maxZoom: 17,
   },
   dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attr: '© CARTO', maxZoom: 19, sub: 'abcd',
+    // CARTO's free basemap CDN now gates unregistered domains behind an API
+    // key (serves an "API KEY REQUIRED" watermark tile instead of the map).
+    // Esri's Dark Gray Canvas needs no key, same as the terrain/satellite
+    // tiles above, and is the same provider already proven working here.
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    attr: '© Esri, HERE, Garmin', maxZoom: 17,
   },
 }
 
