@@ -50,7 +50,7 @@ export function levelFromDriftKm(km: number): DriftLevel {
 
 /** 16-point compass heading from a great-circle bearing in degrees. */
 export function headingFromBearing(bearing: number): string {
-  return COMPASS[Math.ceil(bearing / 22.5) % 16]
+  return COMPASS[Math.round(bearing / 22.5) % 16]
 }
 
 /**
