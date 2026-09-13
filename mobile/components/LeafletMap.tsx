@@ -10,6 +10,8 @@ interface Props {
   storms: LiveStorm[]
   forecasts: Record<string, ForecastStep[]>
   spaghetti?: { storm: string; models: ModelTrack[] } | null
+  /** One ensemble uncertainty cone per storm: closed [lat,lon] ring + level colour. */
+  cones?: Array<{ ring: Array<[number, number]>; color: string; simulated: boolean }> | null
   weatherGrid?: WeatherGrid | null
   marineGrid?: MarineGrid | null
   layer?: WeatherLayer | null       // active weather overlay, or null for none
@@ -28,7 +30,7 @@ interface Props {
  * 10-model spaghetti, and a smooth Windy-style weather overlay.
  */
 export function LeafletMap({
-  storms, forecasts, spaghetti, weatherGrid, marineGrid, layer, forecastHour, basemap,
+  storms, forecasts, spaghetti, cones, weatherGrid, marineGrid, layer, forecastHour, basemap,
   focusStorm, focusKey, parKey,
 }: Props) {
   const ref = useRef<WebView>(null)
@@ -46,6 +48,8 @@ export function LeafletMap({
     ? { storm: spaghetti.storm, models: spaghetti.models.map(m => ({ color: m.color, source: m.source, pts: m.points.map(p => [p.lat, p.lon]) })) }
     : null).replace(/</g, '\\u003c')
 
+  const conePayload = () => JSON.stringify(cones ?? []).replace(/</g, '\\u003c')
+
   const weatherPayload = () => JSON.stringify({ weather: weatherGrid ?? null, marine: marineGrid ?? null }).replace(/</g, '\\u003c')
   const layerPayload = () => JSON.stringify(layer ?? null).replace(/</g, '\\u003c')
 
@@ -56,6 +60,7 @@ export function LeafletMap({
     inject(`HU.setHour(${forecastHour})`)
     inject(`HU.setStorms(${stormsPayload()})`)
     inject(`HU.setSpaghetti(${spaghettiPayload()})`)
+    inject(`HU.setCone(${conePayload()})`)
     // Focus the tapped storm if one was requested; otherwise fit all storms.
     if (focusStorm) inject(`HU.focus(${JSON.stringify(focusStorm)})`)
     else inject(`HU.fit()`)
@@ -68,6 +73,7 @@ export function LeafletMap({
   useEffect(() => { if (ready.current) inject(`HU.setHour(${forecastHour})`) }, [forecastHour])
   useEffect(() => { if (ready.current) { inject(`HU.setStorms(${stormsPayload()})`); if (!focusStorm) inject(`HU.fit()`) } }, [storms, forecasts])
   useEffect(() => { if (ready.current) inject(`HU.setSpaghetti(${spaghettiPayload()})`) }, [spaghetti])
+  useEffect(() => { if (ready.current) inject(`HU.setCone(${conePayload()})`) }, [cones])
   // Fly to a storm when tapped from the Storms tab (focusKey nonce re-triggers).
   useEffect(() => { if (ready.current && focusStorm) inject(`HU.focus(${JSON.stringify(focusStorm)})`) }, [focusStorm, focusKey])
   // Fit the map to the PAR region when the PAR button is tapped.
@@ -138,6 +144,12 @@ const MAP_HTML = `<!DOCTYPE html><html><head>
 
   var stormTracks = L.layerGroup().addTo(map);
   var stormMarks = L.layerGroup().addTo(map);
+  // Cone sits in its own pane below the overlay pane (400), so it can never
+  // cover the spaghetti tracks or storm markers drawn above it.
+  var conePane = map.createPane('conePane');
+  conePane.style.zIndex = '390';
+  conePane.style.pointerEvents = 'none';
+  var coneLayer = L.layerGroup().addTo(map);
   var spag = L.layerGroup().addTo(map);
   var cityLayer = L.layerGroup().addTo(map);
 
@@ -358,6 +370,7 @@ const MAP_HTML = `<!DOCTYPE html><html><head>
     setHour: function(h){ try{ STATE.hour=h|0; renderMarks(); refresh(); }catch(e){} },
     setStorms: function(arr){ try{ STATE.storms=arr||[]; renderTracks(); renderMarks(); }catch(e){} },
     setSpaghetti: function(o){ try{ spag.clearLayers(); if(o&&o.models) o.models.forEach(function(m){ if(m.pts.length>1) L.polyline(m.pts,{color:m.color,weight:1.8,opacity:m.source==='live'?.9:.6,dashArray:m.source==='live'?null:'4 4'}).addTo(spag); }); }catch(e){} },
+    setCone: function(arr){ try{ coneLayer.clearLayers(); (arr||[]).forEach(function(o){ if(o&&o.ring&&o.ring.length>2) L.polygon(o.ring,{pane:'conePane',color:o.color,weight:1,opacity:o.simulated?.35:.6,dashArray:'5 5',fillColor:o.color,fillOpacity:o.simulated?.08:.15}).addTo(coneLayer); }); }catch(e){} },
     fit: function(){ try{ var b=STATE.storms.map(function(s){return [s.lat,s.lon];}); if(b.length){ map.fitBounds(b,{padding:[60,90],maxZoom:6}); } }catch(e){} },
     focus: function(name){ try{ var s=null; for(var i=0;i<STATE.storms.length;i++){ if(STATE.storms[i].name===name){ s=STATE.storms[i]; break; } } if(!s) return; var p=interp(s, STATE.hour); map.setView([p.lat,p.lon], 6, {animate:true}); var mk=null; stormMarks.eachLayer(function(l){ if(l.getPopup && l.getLatLng && Math.abs(l.getLatLng().lat-p.lat)<0.05 && Math.abs(l.getLatLng().lng-p.lon)<0.05 && l.getPopup) { mk=l; } }); if(mk && mk.openPopup) setTimeout(function(){ try{ mk.openPopup(); }catch(e){} }, 400); }catch(e){} },
     fitPar: function(){ try{ map.fitBounds(PAR, {padding:[30,30], animate:true}); }catch(e){} }

@@ -24,6 +24,7 @@ const initialState: DashboardState = {
   seasonalData: null,
   hoverInfo: null,
   enabledModels: [...ALL_MODEL_IDS],
+  showCone: true,          // on by default — the spread is the point
 }
 
 // ── Reducer ───────────────────────────────────────────────
@@ -70,6 +71,8 @@ function reducer(state: DashboardState, action: DashboardAction): DashboardState
       }
     case 'SET_ENABLED_MODELS':
       return { ...state, enabledModels: action.models }
+    case 'TOGGLE_CONE':
+      return { ...state, showCone: !state.showCone }
     default:
       return state
   }
@@ -92,6 +95,7 @@ type ContextValue = {
   clearHover:     ()                       => void
   toggleModel:    (m: ForecastModelId)     => void
   setEnabledModels:(ms: ForecastModelId[]) => void
+  toggleCone:     ()                       => void
 }
 
 const DashboardContext = createContext<ContextValue | null>(null)
@@ -112,6 +116,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const clearHover      = useCallback(()                       => dispatch({ type:'CLEAR_HOVER' }), [])
   const toggleModel     = useCallback((model: ForecastModelId) => dispatch({ type:'TOGGLE_MODEL', model }), [])
   const setEnabledModels= useCallback((models: ForecastModelId[]) => dispatch({ type:'SET_ENABLED_MODELS', models }), [])
+  const toggleCone      = useCallback(()                       => dispatch({ type:'TOGGLE_CONE' }), [])
 
   return (
     <DashboardContext.Provider value={{
@@ -119,7 +124,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       setLayer, setMapTheme, setForecastHour, setPlaying,
       setActiveStorm, setForecastSteps, setGridPoints, setWindGrid,
       setSeasonalData, setHover, clearHover,
-      toggleModel, setEnabledModels,
+      toggleModel, setEnabledModels, toggleCone,
     }}>
       {children}
     </DashboardContext.Provider>

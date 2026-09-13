@@ -10,6 +10,7 @@ import { NotificationCenter } from '../alerts/NotificationCenter'
 import { useParBroadcastEngine } from '@/hooks/useParBroadcastEngine'
 import { useDemoScenario } from '@/hooks/useDemoScenario'
 import { ModelLegend } from './ModelLegend'
+import { coneRings, buildConePolygon, scoreUncertainty, UNCERTAINTY_META } from '@/lib/uncertainty'
 
 interface StormPoint { lat: number; lon: number }
 interface LiveStorm {
@@ -93,6 +94,7 @@ export function HurricaneTracker() {
   const tracksRef  = useRef<import('leaflet').Layer[]>([])  // historical + forecast lines
   const markersRef = useRef<import('leaflet').Layer[]>([])  // animated position circle + label
   const spaghettiRef = useRef<import('leaflet').Layer[]>([]) // multi-model ensemble polylines
+  const coneRef = useRef<import('leaflet').Layer[]>([])      // ensemble uncertainty cones
   const [retryTick, setRetryTick] = useState(0)
 
   // Multi-model ensemble tracks per storm name (10 agencies).
@@ -104,6 +106,7 @@ export function HurricaneTracker() {
   const forecastHour = state.forecastHour   // 0–168
   const enabledModels = state.enabledModels
   const showAiLine = enabledModels.includes('AI_ENSEMBLE')
+  const showCone = state.showCone
 
   // Demo Scenario (defense replay). While active, we suppress the live feed and
   // inject the replayed storm into `storms`, so all the alert/broadcast/track
@@ -406,6 +409,72 @@ export function HurricaneTracker() {
       spaghettiRef.current = []
     }
   }, [active, storms, modelTracks, enabledModels, mapRef])
+
+  // ── Effect 1.6: Ensemble uncertainty cone ──────────────────────────
+  // The envelope of all 10 agency forecasts: where the storm could
+  // plausibly go, not just where the center line says it will. Drawn in a
+  // dedicated pane BELOW the overlay pane so it can never cover the
+  // spaghetti tracks, whichever effect happens to run first.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    coneRef.current.forEach(l => { try { map.removeLayer(l) } catch {} })
+    coneRef.current = []
+
+    if (!active || !showCone || !storms.length) return
+
+    import('leaflet').then((L) => {
+      const m = mapRef.current
+      if (!m) return
+      if (!m.getPane('conePane')) {
+        const pane = m.createPane('conePane')
+        pane.style.zIndex = '390'            // overlayPane is 400
+        pane.style.pointerEvents = 'none'    // never steal clicks from the tracks
+      }
+      const layers: import('leaflet').Layer[] = []
+
+      try {
+        for (const storm of storms) {
+          const tracks = modelTracks[storm.info.name]
+          if (!tracks || tracks.length < 2) continue
+
+          const rings = coneRings(tracks, { lat: storm.info.lat, lon: storm.info.lon })
+          const ring = buildConePolygon(rings)
+          if (!ring) continue
+
+          // Cone colour reflects how uncertain the forecast is. The score is
+          // computed from every fetched track, NOT only the models enabled in
+          // the legend — unchecking agencies must not shrink the cone into
+          // implying a confidence the ensemble does not support.
+          const score = scoreUncertainty(tracks, { applySplitRule: !isInPar(storm.info.lat, storm.info.lon) })
+          const meta = UNCERTAINTY_META[score?.level ?? 'moderate']
+          const simulated = score?.simulated ?? true
+
+          const poly = L.polygon(ring, {
+            pane: 'conePane',
+            color: meta.color,
+            weight: 1,
+            opacity: simulated ? 0.35 : 0.6,
+            dashArray: '5 5',
+            fillColor: meta.color,
+            fillOpacity: simulated ? 0.08 : 0.15,
+          })
+          poly.addTo(m)
+          layers.push(poly)
+        }
+      } catch (err) {
+        console.error('[HurricaneTracker] cone draw error:', err)
+      }
+
+      coneRef.current = layers
+    })
+
+    return () => {
+      coneRef.current.forEach(l => { try { map.removeLayer(l) } catch {} })
+      coneRef.current = []
+    }
+  }, [active, storms, modelTracks, showCone, mapRef])
 
   // ── Effect 2: Animated marker — updates on every timeline scrub ──
   useEffect(() => {

@@ -8,13 +8,13 @@
 // suppresses the live poll and steps a real historical typhoon (GONI/Rolly 2020)
 // through this same pipeline, so PAR alerts + local notifications fire for real.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react'
-import { fetchStorms, fetchForecast, fetchScenario } from '../lib/api'
+import { fetchStorms, fetchForecast, fetchScenario, fetchMultiModel } from '../lib/api'
 import {
   getNotificationPermission, requestNotificationPermission, scheduleLocalNotification,
 } from '../lib/notifications'
 import { computeParAlerts, alertHeadline, type ParAlert } from '../lib/alerts'
 import { isInPar } from '../lib/par'
-import type { LiveStorm, ForecastStep, TrackPoint } from '../lib/types'
+import type { LiveStorm, ForecastStep, TrackPoint, ModelTrack } from '../lib/types'
 
 const POLL_MS = 10 * 60 * 1000
 const NAGA = { lat: 13.62, lon: 123.18 }
@@ -32,6 +32,8 @@ function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number) {
 interface StormData {
   storms: LiveStorm[]
   forecasts: Record<string, ForecastStep[]>
+  /** 10-agency ensemble per storm — drives the spread score and the map cone. */
+  modelTracks: Record<string, ModelTrack[]>
   alerts: ParAlert[]
   source: string | null
   loading: boolean
@@ -61,6 +63,7 @@ const Ctx = createContext<StormData | null>(null)
 export function StormDataProvider({ children }: { children: ReactNode }) {
   const [storms, setStorms] = useState<LiveStorm[]>([])
   const [forecasts, setForecasts] = useState<Record<string, ForecastStep[]>>({})
+  const [modelTracks, setModelTracks] = useState<Record<string, ModelTrack[]>>({})
   const [alerts, setAlerts] = useState<ParAlert[]>([])
   const [source, setSource] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -108,7 +111,24 @@ export function StormDataProvider({ children }: { children: ReactNode }) {
       const fcMap = Object.fromEntries(fcEntries)
       setForecasts(fcMap)
 
-      const nextAlerts = computeParAlerts(list, fcMap)
+      // 10-agency ensemble, needed by the Alerts tab for the spread score.
+      // The backend caches these for 10 min, matching this poll interval.
+      // A failure here is non-fatal: alerts still work, just without a
+      // spread chip.
+      const mtEntries = await Promise.all(list.map(async (s): Promise<[string, ModelTrack[]]> => {
+        try {
+          const history: TrackPoint[] = s.path?.length ? s.path.slice(-16) : [{ lat: s.lat, lon: s.lon }]
+          if (history.length < 2) return [s.name, []]
+          const res = await fetchMultiModel(s.name, history)
+          return [s.name, res.models ?? []]
+        } catch {
+          return [s.name, []]
+        }
+      }))
+      const mtMap = Object.fromEntries(mtEntries)
+      setModelTracks(mtMap)
+
+      const nextAlerts = computeParAlerts(list, fcMap, mtMap)
       setAlerts(nextAlerts)
       setLastUpdated(new Date())
       void fireNotifications(nextAlerts, notifiedRef.current)
@@ -148,7 +168,7 @@ export function StormDataProvider({ children }: { children: ReactNode }) {
       demoNagaRef.current = false
       setDemoName(j.display_name || 'GONI (Rolly) 2020')
       setDemoIndex(demoStartIdxRef.current)
-      setStorms([]); setForecasts({}); setAlerts([])
+      setStorms([]); setForecasts({}); setModelTracks({}); setAlerts([])
       setDemoActive(true); setDemoPlaying(false)   // start paused; user presses Play
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the demo scenario.')
@@ -160,7 +180,7 @@ export function StormDataProvider({ children }: { children: ReactNode }) {
   const demoStop = useCallback(() => {
     setDemoActive(false); setDemoPlaying(false)
     demoPointsRef.current = []; demoCatsRef.current = []
-    setStorms([]); setForecasts({}); setAlerts([]); setSource(null)
+    setStorms([]); setForecasts({}); setModelTracks({}); setAlerts([]); setSource(null)
     // Restore the live feed on the next tick (after demoActiveRef clears).
     setTimeout(() => load(false), 0)
   }, [load])
@@ -213,19 +233,24 @@ export function StormDataProvider({ children }: { children: ReactNode }) {
     }
     setStorms([storm]); setSource('DEMO'); setLastUpdated(new Date())
 
-    // LSTM forecast for the partial track (throttled) → alerts
+    // LSTM forecast + agency ensemble for the partial track (throttled) →
+    // alerts. The ensemble is fetched here too so the replay shows a real
+    // spread score and uncertainty cone, not just the center line.
     if (!demoFetchingRef.current && path.length >= 2) {
       demoFetchingRef.current = true
-      fetchForecast('GONI-DEMO', path.slice(-16))
-        .then(fc => {
-          const steps = fc.forecast_steps ?? []
+      const history = path.slice(-16)
+      Promise.all([
+        fetchForecast('GONI-DEMO', history).then(fc => fc.forecast_steps ?? []).catch(() => [] as ForecastStep[]),
+        fetchMultiModel('GONI-DEMO', history).then(r => r.models ?? []).catch(() => [] as ModelTrack[]),
+      ])
+        .then(([steps, models]) => {
           setForecasts({ [DEMO_STORM]: steps })
-          setAlerts(computeParAlerts([storm], { [DEMO_STORM]: steps }))
+          setModelTracks({ [DEMO_STORM]: models })
+          setAlerts(computeParAlerts([storm], { [DEMO_STORM]: steps }, { [DEMO_STORM]: models }))
         })
-        .catch(() => setAlerts(computeParAlerts([storm], {})))
         .finally(() => { demoFetchingRef.current = false })
     } else {
-      setAlerts(computeParAlerts([storm], forecasts))
+      setAlerts(computeParAlerts([storm], forecasts, modelTracks))
     }
 
     // Local notifications on PAR entry and near-Naga landfall
@@ -256,7 +281,7 @@ export function StormDataProvider({ children }: { children: ReactNode }) {
   })()
 
   const value: StormData = {
-    storms, forecasts, alerts, source, loading, refreshing, error, lastUpdated,
+    storms, forecasts, modelTracks, alerts, source, loading, refreshing, error, lastUpdated,
     refresh: () => load(true),
     demoActive, demoLoading, demoPlaying, demoSpeed,
     demoIndex: Math.max(0, demoIndex - demoStartIdxRef.current),

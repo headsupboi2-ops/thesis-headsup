@@ -5,7 +5,11 @@ import { getNotificationPermission, requestNotificationPermission } from '../../
 import { ScreenHeader } from '../../components/ScreenHeader'
 import { EmptyState, ErrorNote, SectionLabel } from '../../components/ui'
 import { useStormData } from '../../hooks/useStormData'
-import { alertHeadline, etaLabel, type ParAlert, type ParAlertStatus } from '../../lib/alerts'
+import {
+  alertHeadline, etaLabel, uncertaintyAdvice, uncertaintyChipText,
+  type ParAlert, type ParAlertStatus,
+} from '../../lib/alerts'
+import { UNCERTAINTY_META } from '../../lib/uncertainty'
 import { colors, space, font, radius, CAT_NAME } from '../../lib/theme'
 
 const STATUS_META: Record<ParAlertStatus, { color: string; icon: keyof typeof Ionicons.glyphMap; tag: string }> = {
@@ -74,6 +78,8 @@ export default function AlertsScreen() {
 
 function AlertBanner({ alert }: { alert: ParAlert }) {
   const m = STATUS_META[alert.status]
+  const u = alert.uncertainty
+  const spreadAdvice = uncertaintyAdvice(u)
   return (
     <View style={[styles.banner, { borderColor: `${m.color}55`, backgroundColor: `${m.color}12` }]}>
       <View style={[styles.bannerIcon, { backgroundColor: `${m.color}22` }]}>
@@ -93,6 +99,18 @@ function AlertBanner({ alert }: { alert: ParAlert }) {
           {alert.tcws && (
             <View style={[styles.signalChip, { backgroundColor: alert.tcws.color }]}>
               <Text style={styles.signalText}>{alert.tcws.short}</Text>
+            </View>
+          )}
+          {u && (
+            <View style={[
+              styles.signalChip,
+              u.simulated
+                ? { backgroundColor: colors.border }
+                : { backgroundColor: UNCERTAINTY_META[u.level].color },
+            ]}>
+              <Text style={[styles.signalText, u.simulated && { color: colors.textSoft }]}>
+                {uncertaintyChipText(u)}
+              </Text>
             </View>
           )}
           {alert.nagaEtaHours != null && (
@@ -117,6 +135,15 @@ function AlertBanner({ alert }: { alert: ParAlert }) {
           <Ionicons name="shield-checkmark" size={13} color={m.color} />
           <Text style={styles.actionText}>{alert.action}</Text>
         </View>
+
+        {/* What the model spread means. Silent when the spread comes mostly
+            from simulated tracks — advice from those would be a false claim. */}
+        {spreadAdvice && u && (
+          <View style={[styles.actionRow, { borderLeftColor: UNCERTAINTY_META[u.level].color }]}>
+            <Ionicons name="git-network" size={13} color={UNCERTAINTY_META[u.level].color} />
+            <Text style={styles.actionText}>{spreadAdvice}</Text>
+          </View>
+        )}
       </View>
     </View>
   )

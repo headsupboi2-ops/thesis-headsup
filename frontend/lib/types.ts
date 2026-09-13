@@ -111,6 +111,7 @@ export interface DashboardState {
   seasonalData: SeasonalOutlook | null
   hoverInfo: HoverInfo | null
   enabledModels: ForecastModelId[]   // multi-model ensemble tracks shown on map
+  showCone: boolean                  // ensemble uncertainty cone drawn under the tracks
 }
 
 export type DashboardAction =
@@ -127,6 +128,7 @@ export type DashboardAction =
   | { type: 'SET_WIND_GRID';     grid: WindGrid }
   | { type: 'SET_SEASONAL_DATA'; data: SeasonalOutlook | null }
   | { type: 'SET_HOVER';         info: HoverInfo }
+  | { type: 'TOGGLE_CONE' }
   | { type: 'CLEAR_HOVER' }
   | { type: 'TOGGLE_MODEL';      model: ForecastModelId }
   | { type: 'SET_ENABLED_MODELS'; models: ForecastModelId[] }

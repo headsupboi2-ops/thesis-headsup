@@ -5,7 +5,8 @@
 // recommended action — so each alert is actionable and Bicol/Naga-focused.
 import { distanceToParKm, firstParEntryHour, isInPar } from './par'
 import { tcwsFromWind, type Tcws } from './tcws'
-import type { LiveStorm, ForecastStep } from './types'
+import { scoreUncertainty, UNCERTAINTY_META, type UncertaintyScore } from './uncertainty'
+import type { LiveStorm, ForecastStep, ModelTrack } from './types'
 
 export type ParAlertStatus = 'inside' | 'approaching' | 'watch'
 
@@ -20,6 +21,8 @@ export interface ParAlert {
   nagaEtaHours: number | null      // hour of closest approach to Naga (if it threatens)
   nagaDistanceKm: number | null    // closest-approach distance to Naga (km)
   action: string                   // recommended action for people in the path
+  /** How far apart the agency forecasts are — null when too few tracks to judge. */
+  uncertainty: UncertaintyScore | null
 }
 
 const WATCH_DISTANCE_KM = 300
@@ -62,6 +65,7 @@ export function recommendedAction(status: ParAlertStatus, tcws: Tcws | null, thr
 export function computeParAlerts(
   storms: LiveStorm[],
   forecasts: Record<string, ForecastStep[]>,
+  modelTracks: Record<string, ModelTrack[]> = {},
 ): ParAlert[] {
   const alerts: ParAlert[] = []
   for (const s of storms) {
@@ -69,13 +73,18 @@ export function computeParAlerts(
     const fc = forecasts[s.name] ?? []
     const tcws = tcwsFromWind(windKt)
     const naga = nagaApproach(s.lat, s.lon, fc)
+    const inside = isInPar(s.lat, s.lon)
+    // Ensemble spread is scored for every status — divergence matters most
+    // while the storm is still days out. PAR entry is already settled for a
+    // storm inside, so the split rule is switched off there.
+    const uncertainty = scoreUncertainty(modelTracks[s.name], { applySplitRule: !inside })
     const base = {
-      storm: s.name, category: s.category, windKt, tcws,
+      storm: s.name, category: s.category, windKt, tcws, uncertainty,
       nagaEtaHours: naga ? naga.etaHours : null,
       nagaDistanceKm: naga ? naga.distanceKm : null,
     }
 
-    if (isInPar(s.lat, s.lon)) {
+    if (inside) {
       alerts.push({
         ...base, status: 'inside', etaHours: null, distanceKm: 0,
         action: recommendedAction('inside', tcws, !!naga),
@@ -109,4 +118,19 @@ export function alertHeadline(a: ParAlert): string {
   if (a.status === 'inside') return `${a.storm} has entered the PAR`
   if (a.status === 'approaching') return `${a.storm} may enter the PAR in ${etaLabel(a.etaHours ?? 0)}`
   return `${a.storm} is near the PAR boundary (${a.distanceKm} km)`
+}
+
+/** Label for the spread chip: SIM when too few live feeds back the number. */
+export function uncertaintyChipText(u: UncertaintyScore): string {
+  return `${u.simulated ? 'SIM' : UNCERTAINTY_META[u.level].short} ${u.spreadKm}km`
+}
+
+/**
+ * Advice about the spread, or null when it should stay silent: a directive
+ * drawn from mostly simulated tracks would be a false claim, and a tight
+ * ensemble needs no extra warning.
+ */
+export function uncertaintyAdvice(u: UncertaintyScore | null): string | null {
+  if (!u || u.simulated || u.level === 'low') return null
+  return UNCERTAINTY_META[u.level].advice
 }

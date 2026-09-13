@@ -12,8 +12,8 @@ import {
  * model LIVE (real agency feed) vs SIM (deterministic mock fallback).
  */
 export function ModelLegend({ tracks }: { tracks: ModelTrack[] }) {
-  const { state, toggleModel, setEnabledModels } = useDashboard()
-  const { enabledModels } = state
+  const { state, toggleModel, setEnabledModels, toggleCone } = useDashboard()
+  const { enabledModels, showCone } = state
   const [collapsed, setCollapsed] = useState(false)
 
   // A model is LIVE if any storm got a real feed for it
@@ -46,6 +46,33 @@ export function ModelLegend({ tracks }: { tracks: ModelTrack[] }) {
 
       {!collapsed && (
         <>
+          {/* Uncertainty cone — the envelope of every agency forecast.
+              Independent of the model checkboxes below: the cone reflects
+              the whole ensemble, not the subset currently drawn. */}
+          <button onClick={toggleCone}
+            title="Shade the area every agency forecast passes through"
+            className="flex items-center gap-2 px-3 py-2 w-full"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              color: showCone ? 'white' : 'rgba(255,255,255,0.35)',
+              textAlign: 'left',
+            }}>
+            <svg width="20" height="12" style={{ flexShrink: 0, opacity: showCone ? 1 : 0.35 }}>
+              <polygon points="1,6 19,1 19,11" fill="#FF9500" fillOpacity="0.25"
+                stroke="#FF9500" strokeWidth="1" strokeDasharray="3 2" />
+            </svg>
+            <span className="flex-1 font-semibold" style={{ fontSize: 10.5 }}>Uncertainty cone</span>
+            <span style={{
+              fontSize: 8, fontWeight: 800, letterSpacing: 0.5,
+              padding: '1px 4px', borderRadius: 3,
+              background: showCone ? 'rgba(40,180,80,0.25)' : 'rgba(255,255,255,0.1)',
+              color: showCone ? '#5f6' : '#aab',
+            }}>
+              {showCone ? 'ON' : 'OFF'}
+            </span>
+          </button>
+
           <div className="flex gap-1 px-3 pt-2">
             {([['All', ALL_MODEL_IDS], ['None', [] as ForecastModelId[]]] as const).map(([label, models]) => (
               <button key={label} onClick={() => setEnabledModels([...models])}

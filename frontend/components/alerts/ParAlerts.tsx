@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { distanceToParKm, firstParEntryHour, isInPar } from '@/lib/par'
 import { tcwsFromWind, type Tcws } from '@/lib/tcws'
 import type { ModelTrack } from '@/lib/forecastModels'
+import { scoreUncertainty, UNCERTAINTY_META, type UncertaintyScore } from '@/lib/uncertainty'
 
 // ── Alert model ─────────────────────────────────────────────────────
 export type ParAlertStatus = 'inside' | 'approaching' | 'watch'
@@ -19,6 +20,8 @@ export interface ParAlert {
   nagaEtaHours: number | null                          // hour of closest approach to Naga
   nagaDistanceKm: number | null                        // closest-approach distance (km)
   action: string                                       // recommended action
+  /** How far apart the agency forecasts are — null when too few tracks to judge. */
+  uncertainty: UncertaintyScore | null
   /** Optional override — the 3-hour broadcast engine swaps in the latest snapshot text. */
   headline?: string
 }
@@ -86,13 +89,19 @@ export function computeParAlerts(
     const windKt = Math.round(wind_speed)
     const tcws = tcwsFromWind(windKt)
     const naga = nagaApproach(lat, lon, storm.forecast)
+    const inside = isInPar(lat, lon)
+    // Ensemble spread is scored for every status — divergence matters most
+    // while the storm is still days out, not only once it is inside.
+    // PAR entry is already settled for a storm inside, so the split rule
+    // (which flags a tight cluster that straddles the boundary) is off there.
+    const uncertainty = scoreUncertainty(modelTracks[name], { applySplitRule: !inside })
     const base = {
-      storm: name, category, windKt, tcws,
+      storm: name, category, windKt, tcws, uncertainty,
       nagaEtaHours: naga ? naga.etaHours : null,
       nagaDistanceKm: naga ? naga.distanceKm : null,
     }
 
-    if (isInPar(lat, lon)) {
+    if (inside) {
       alerts.push({
         ...base, status: 'inside', etaHours: null, consensus: null, distanceKm: 0,
         action: recommendedAction('inside', tcws, !!naga),
@@ -149,6 +158,28 @@ function alertHeadline(a: ParAlert): string {
   if (a.status === 'approaching')
     return `${a.storm} may enter PAR in ${fmtEta(a.etaHours ?? 0)} — ${a.consensus!.entering}/${a.consensus!.total} models agree`
   return `${a.storm} near PAR boundary — ${a.distanceKm} km away`
+}
+
+/**
+ * Spread chip: how much the agencies disagree. Reads SIM when too few live
+ * feeds contribute for the number to mean anything — the spread of mostly
+ * simulated tracks measures our own generator, not the atmosphere.
+ */
+function UncertaintyChip({ u }: { u: UncertaintyScore }) {
+  const m = UNCERTAINTY_META[u.level]
+  return (
+    <span
+      title={`${m.label} · ${u.spreadKm} km mean spread across ${u.total} models at +${u.atHour}h` +
+        (u.simulated ? ' · mostly simulated tracks' : ` · ${u.liveCount} live agency feeds`)}
+      style={{
+        background: u.simulated ? 'rgba(255,255,255,0.16)' : m.color,
+        color: u.simulated ? 'rgba(255,255,255,0.9)' : '#0a1a3a',
+        borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 900,
+        flexShrink: 0, letterSpacing: 0.3,
+      }}>
+      {u.simulated ? 'SIM' : m.short} {u.spreadKm}km
+    </span>
+  )
 }
 
 /**
@@ -210,6 +241,7 @@ export function ParAlerts({ alerts, top = 92 }: { alerts: ParAlert[]; top?: numb
                   padding: '1px 6px', fontSize: 11, fontWeight: 900, flexShrink: 0,
                 }}>{a.tcws.short}</span>
               )}
+              {a.uncertainty && <UncertaintyChip u={a.uncertainty} />}
               <span>{alertHeadline(a)}</span>
               {nagaText && (
                 <span style={{
@@ -231,6 +263,14 @@ export function ParAlerts({ alerts, top = 92 }: { alerts: ParAlert[]; top?: numb
               <div className="flex items-center gap-1.5 mt-1 text-[11px]"
                 style={{ color: 'rgba(255,255,255,0.92)' }}>
                 <span>🛡</span><span>{a.action}</span>
+              </div>
+            )}
+            {/* Only advise on spread when real agency feeds back it up — a
+                directive drawn from simulated tracks would be a false claim. */}
+            {a.uncertainty && !a.uncertainty.simulated && a.uncertainty.level !== 'low' && (
+              <div className="flex items-center gap-1.5 mt-1 text-[11px]"
+                style={{ color: 'rgba(255,255,255,0.92)' }}>
+                <span>🎯</span><span>{UNCERTAINTY_META[a.uncertainty.level].advice}</span>
               </div>
             )}
           </div>

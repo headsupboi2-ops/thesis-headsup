@@ -9,6 +9,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ModelTrack } from '@/lib/forecastModels'
 import type { ParAlert } from '@/components/alerts/ParAlerts'
+import { haversineKm, spreadAtHour } from '@/lib/uncertainty'
+
+export { haversineKm }
 
 // ── Packet types ────────────────────────────────────────────────────
 export interface ConsensusSnapshot {
@@ -62,15 +65,6 @@ const BEST_TRACK_STEP_H = 6       // agency best-track fixes are 6-hourly
 
 // ── Pure utilities ──────────────────────────────────────────────────
 const RAD = Math.PI / 180
-const EARTH_R = 6371
-
-export function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): number {
-  const dLat = (bLat - aLat) * RAD
-  const dLon = (bLon - aLon) * RAD
-  const s = Math.sin(dLat / 2) ** 2 +
-    Math.cos(aLat * RAD) * Math.cos(bLat * RAD) * Math.sin(dLon / 2) ** 2
-  return 2 * EARTH_R * Math.asin(Math.sqrt(s))
-}
 
 const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW']
 
@@ -103,26 +97,14 @@ export function tcwsFromWind(windKt: number): BroadcastPacket['tcws'] {
 /** Snapshot the 10-model spread at +48 h: how tightly the ensemble agrees. */
 export function consensusSnapshot(tracks: ModelTrack[] | undefined): ConsensusSnapshot | null {
   if (!tracks?.length) return null
-  const at48 = tracks
-    .map(t => {
-      let best: { lat: number; lon: number } | null = null
-      let bestDiff = Infinity
-      for (const p of t.points) {
-        const diff = Math.abs(p.hour - 48)
-        if (diff < bestDiff) { bestDiff = diff; best = { lat: p.lat, lon: p.lon } }
-      }
-      return best
-    })
-    .filter((p): p is { lat: number; lon: number } => p !== null)
-  if (at48.length < 2) return null
-  const centroid = {
-    lat: at48.reduce((s, p) => s + p.lat, 0) / at48.length,
-    lon: at48.reduce((s, p) => s + p.lon, 0) / at48.length,
+  const spread = spreadAtHour(tracks, 48)
+  if (!spread) return null
+  return {
+    entering: 0,
+    total: tracks.length,
+    spreadKm: Math.round(spread.meanKm),
+    centroid: spread.centroid,
   }
-  const spreadKm = Math.round(
-    at48.reduce((s, p) => s + haversineKm(p.lat, p.lon, centroid.lat, centroid.lon), 0) / at48.length,
-  )
-  return { entering: 0, total: tracks.length, spreadKm, centroid }
 }
 
 /** Compare two consensus snapshots taken 3 h apart. */
@@ -174,6 +156,13 @@ export function generateThreeHourUpdate(
   ]
   if (movement) parts.push(`moving ${movement.heading} at ${movement.speedKmh} km/h`)
   if (tcws) parts.push(`— ${tcws.label.split(' — ')[0]} warranted for areas in the path`)
+  // How the agencies' agreement moved since the last packet. A widening or
+  // shifting consensus is the whole point of a 3-hourly update: it tells
+  // people whose plan was based on the old center line to re-check it.
+  if (consensusChange && consensusChange !== 'steady') {
+    parts.push(`· ${CONSENSUS_TEXT[consensusChange]}`)
+  }
+  if (consensus) parts.push(`(spread ${consensus.spreadKm} km across ${consensus.total} models)`)
 
   return {
     id: `${name}:${hoursElapsed}`,

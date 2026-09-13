@@ -11,13 +11,15 @@ import { useStormData } from '../../hooks/useStormData'
 import { fetchMultiModel } from '../../lib/api'
 import { fetchWeatherGrid, fetchMarineGrid, dailyForecast, type WeatherGrid, type MarineGrid, type DayForecast } from '../../lib/weather'
 import { susceptibilityAt } from '../../lib/hazard'
+import { coneRings, buildConePolygon, scoreUncertainty, UNCERTAINTY_META } from '../../lib/uncertainty'
+import { isInPar } from '../../lib/par'
 import { WEATHER_LAYERS, WEATHER_LAYER_BY_ID, type WeatherLayerId, type BasemapId } from '../../lib/weatherLayers'
 import { colors, space, font, radius } from '../../lib/theme'
 import type { ModelTrack, TrackPoint } from '../../lib/types'
 
 export default function MapScreen() {
   const { focus, fk } = useLocalSearchParams<{ focus?: string; fk?: string }>()
-  const { storms, forecasts } = useStormData()
+  const { storms, forecasts, modelTracks } = useStormData()
   const [spaghetti, setSpaghetti] = useState<{ storm: string; models: ModelTrack[] } | null>(null)
   const [ensembleBusy, setEnsembleBusy] = useState(false)
 
@@ -27,6 +29,7 @@ export default function MapScreen() {
   const [playing, setPlaying] = useState(false)
   const [parKey, setParKey] = useState<string | undefined>(undefined)
   const [showForecast, setShowForecast] = useState(true)
+  const [showCone, setShowCone] = useState(true)
 
   const [weatherGrid, setWeatherGrid] = useState<WeatherGrid | null>(null)
   const [marineGrid, setMarineGrid] = useState<MarineGrid | null>(null)
@@ -48,6 +51,35 @@ export default function MapScreen() {
   const weatherGridWithSusc = useMemo(() => weatherGrid
     ? { ...weatherGrid, points: weatherGrid.points.map(p => ({ ...p, flood_susc: susceptibilityAt(p.lat, p.lon) })) }
     : null, [weatherGrid])
+
+  // Whether ANY storm has enough of an ensemble to draw a cone. Drives the
+  // chip's visibility independently of showCone — keying it off `cones`
+  // would hide the chip the moment you switched the cone off.
+  const coneAvailable = useMemo(
+    () => storms.some(s => (modelTracks[s.name]?.length ?? 0) >= 2),
+    [storms, modelTracks],
+  )
+
+  // Uncertainty cone per storm — the envelope every agency forecast falls
+  // inside. Built from the full ensemble the provider already polls, so it
+  // shows without the user having to switch the spaghetti on first.
+  const cones = useMemo(() => {
+    if (!showCone) return []
+    const out: Array<{ ring: Array<[number, number]>; color: string; simulated: boolean }> = []
+    for (const s of storms) {
+      const tracks = modelTracks[s.name]
+      if (!tracks || tracks.length < 2) continue
+      const ring = buildConePolygon(coneRings(tracks, { lat: s.lat, lon: s.lon }))
+      if (!ring) continue
+      const score = scoreUncertainty(tracks, { applySplitRule: !isInPar(s.lat, s.lon) })
+      out.push({
+        ring,
+        color: UNCERTAINTY_META[score?.level ?? 'moderate'].color,
+        simulated: score?.simulated ?? true,
+      })
+    }
+    return out
+  }, [storms, modelTracks, showCone])
 
   const days: DayForecast[] = useMemo(() => weatherGrid ? dailyForecast(weatherGrid) : [], [weatherGrid])
   const strongest = [...storms].sort((a, b) => b.wind_speed - a.wind_speed)[0]
@@ -97,13 +129,17 @@ export default function MapScreen() {
             <Chip icon="git-network" label={spaghetti ? 'Ensemble ✓' : 'Ensemble'} active={!!spaghetti}
               busy={ensembleBusy} onPress={toggleEnsemble} />
           )}
+          {coneAvailable && (
+            <Chip icon="triangle" label="Cone" active={showCone}
+              onPress={() => setShowCone(v => !v)} />
+          )}
         </ScrollView>
       </View>
 
       {/* Map — fills all remaining space */}
       <View style={styles.mapWrap}>
         <LeafletMap
-          storms={storms} forecasts={forecasts} spaghetti={spaghetti}
+          storms={storms} forecasts={forecasts} spaghetti={spaghetti} cones={cones}
           weatherGrid={weatherGridWithSusc} marineGrid={marineGrid}
           layer={activeLayer} forecastHour={hour} basemap={basemap}
           focusStorm={focus} focusKey={fk} parKey={parKey}
