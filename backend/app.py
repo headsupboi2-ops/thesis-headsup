@@ -23,6 +23,21 @@ sys.path.insert(0, scripts_path)
 # Import typhoon_scraper after path is set
 import typhoon_scraper as ty
 
+# Agency storm feeds (JMA / PAGASA / JTWC / IBTrACS below) go through this
+# instead of requests.get: they are CDN-hosted with AAAA records that reset
+# during the TLS handshake on networks with broken IPv6, and it retries those
+# over IPv4. Weather endpoints elsewhere in this file are unaffected and keep
+# using requests directly. See scripts/net.py.
+#
+# Imported by the SAME name scripts/multi_model_tracks.py uses. Both backend/
+# and backend/scripts/ are on sys.path, so "net" and "scripts.net" would load
+# two separate copies of the module — each with its own lock guarding the
+# process-wide address-family patch, which defeats the locking.
+try:
+    from scripts.net import get as _http_get
+except ImportError:
+    from net import get as _http_get
+
 # Global variables
 typhoons_data = {}
 loading_status = {}
@@ -193,7 +208,7 @@ def _fetch_live_storms():
     try:
         _HDRS = {'User-Agent': 'StormForecastingApp/1.0'}
         _JMA = 'https://www.jma.go.jp/bosai/typhoon/data'
-        _tgt = requests.get(f'{_JMA}/targetTc.json', timeout=10, headers=_HDRS)
+        _tgt = _http_get(f'{_JMA}/targetTc.json', timeout=10, headers=_HDRS)
         _tgt.raise_for_status()
         _jma_storms = []
         for _tc in (_tgt.json() or []):
@@ -201,7 +216,7 @@ def _fetch_live_storms():
             if not _tid:
                 continue
             try:
-                _spec = requests.get(f'{_JMA}/{_tid}/specifications.json', timeout=10, headers=_HDRS).json()
+                _spec = _http_get(f'{_JMA}/{_tid}/specifications.json', timeout=10, headers=_HDRS).json()
             except Exception:
                 continue
             # Pull the name (title part) and the advancedHours==0 "Analysis" part.
@@ -226,7 +241,7 @@ def _fetch_live_storms():
             # Observed track from forecast.json (advancedHours==0 → track.preTyphoon + track.typhoon).
             _path = []
             try:
-                _fc = requests.get(f'{_JMA}/{_tid}/forecast.json', timeout=10, headers=_HDRS).json()
+                _fc = _http_get(f'{_JMA}/{_tid}/forecast.json', timeout=10, headers=_HDRS).json()
                 for _part in _fc:
                     if _part.get('advancedHours') != 0:
                         continue
@@ -261,7 +276,7 @@ def _fetch_live_storms():
         'https://api.pagasa.dost.gov.ph/api/v1/tropical-cyclone/active',
     ]:
         try:
-            r = requests.get(url, timeout=10, headers={'User-Agent': 'StormForecastingApp/1.0'})
+            r = _http_get(url, timeout=10, headers={'User-Agent': 'StormForecastingApp/1.0'})
             r.raise_for_status()
             data = r.json()
             storms = []
@@ -289,7 +304,7 @@ def _fetch_live_storms():
     # 2. JTWC RSS — description has only HTML links; fetch linked warning text for position data
     # NOTE: metoc.navy.mil blocks direct text-file fetches, so this step is best-effort only.
     try:
-        r = requests.get(
+        r = _http_get(
             'https://www.metoc.navy.mil/jtwc/rss/jtwc.rss',
             timeout=12, headers={'User-Agent': 'StormForecastingApp/1.0'}
         )
@@ -307,7 +322,7 @@ def _fetch_live_storms():
             for name_raw, txt_url in zip(names, txt_urls):
                 name = name_raw.upper().strip()
                 try:
-                    tr = requests.get(txt_url, timeout=8, headers=HDRS)
+                    tr = _http_get(txt_url, timeout=8, headers=HDRS)
                     tr.raise_for_status()
                     txt = tr.text
                     pos = _re.search(r'POSITION[:\s]+(\d+\.?\d*)\s*N[,\s]+(\d+\.?\d*)\s*E', txt, _re.I)
@@ -341,7 +356,7 @@ def _fetch_live_storms():
             'https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs'
             '/v04r01/access/csv/ibtracs.ACTIVE.list.v04r01.csv'
         )
-        _r = requests.get(_IBTRACS_ACTIVE, timeout=15,
+        _r = _http_get(_IBTRACS_ACTIVE, timeout=15,
                           headers={'User-Agent': 'StormForecastingApp/1.0'})
         _r.raise_for_status()
         _lines = _r.text.splitlines()

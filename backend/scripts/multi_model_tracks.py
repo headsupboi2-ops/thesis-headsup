@@ -25,7 +25,13 @@ import xml.etree.ElementTree as _ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
-import requests
+# Agency feeds go through this rather than requests.get directly: several are
+# CDN-hosted with AAAA records that reset during the TLS handshake on networks
+# with broken IPv6, and it retries those over IPv4. See scripts/net.py.
+try:                        # app.py puts backend/ on sys.path …
+    from scripts.net import get as _http_get
+except ImportError:         # … and backend/scripts/ too, so either import works
+    from net import get as _http_get
 
 logger = logging.getLogger(__name__)
 
@@ -118,14 +124,14 @@ def _fetch_jma(storm_name):
       last point. (The old current_information.json endpoint now 404s.)
     """
     base = 'https://www.jma.go.jp/bosai/typhoon/data'
-    tgt = requests.get(f'{base}/targetTc.json', timeout=10, headers=HDRS)
+    tgt = _http_get(f'{base}/targetTc.json', timeout=10, headers=HDRS)
     tgt.raise_for_status()
     for tc in (tgt.json() or []):
         tid = tc.get('tropicalCyclone')
         if not tid:
             continue
         try:
-            spec = requests.get(f'{base}/{tid}/specifications.json', timeout=10, headers=HDRS).json()
+            spec = _http_get(f'{base}/{tid}/specifications.json', timeout=10, headers=HDRS).json()
         except Exception:
             continue
         name = ''
@@ -137,7 +143,7 @@ def _fetch_jma(storm_name):
         if name != storm_name.upper():
             continue
         try:
-            fc = requests.get(f'{base}/{tid}/forecast.json', timeout=10, headers=HDRS).json()
+            fc = _http_get(f'{base}/{tid}/forecast.json', timeout=10, headers=HDRS).json()
         except Exception:
             return None
         pts = []
@@ -162,7 +168,7 @@ def _fetch_jma(storm_name):
 
 def _fetch_pagasa(storm_name):
     """PAGASA public bulletin JSON — forecast positions when present."""
-    r = requests.get('https://pubfiles.pagasa.dost.gov.ph/tamss/weather/bulletin.json',
+    r = _http_get('https://pubfiles.pagasa.dost.gov.ph/tamss/weather/bulletin.json',
                      timeout=10, headers=HDRS)
     r.raise_for_status()
     data = r.json()
@@ -203,7 +209,7 @@ def _fetch_pagasa(storm_name):
 
 def _fetch_jtwc(storm_name):
     """JTWC RSS → linked warning text → parse 'NN HRS, VALID AT' forecast fixes."""
-    r = requests.get('https://www.metoc.navy.mil/jtwc/rss/jtwc.rss', timeout=12, headers=HDRS)
+    r = _http_get('https://www.metoc.navy.mil/jtwc/rss/jtwc.rss', timeout=12, headers=HDRS)
     r.raise_for_status()
     root = _ET.fromstring(r.content)
     for item in root.findall('.//item'):
@@ -213,7 +219,7 @@ def _fetch_jtwc(storm_name):
         for name_raw, txt_url in zip(names, txt_urls):
             if name_raw.upper().strip() != storm_name.upper():
                 continue
-            tr = requests.get(txt_url, timeout=8, headers=HDRS)
+            tr = _http_get(txt_url, timeout=8, headers=HDRS)
             tr.raise_for_status()
             txt = tr.text
             pts = []
@@ -234,7 +240,7 @@ def _fetch_jtwc(storm_name):
 
 def _fetch_hko(storm_name):
     """HKO open-data TC track feed — best-effort, structure varies."""
-    r = requests.get('https://data.weather.gov.hk/weatherAPI/opendata/tcTrack.php?dataType=json',
+    r = _http_get('https://data.weather.gov.hk/weatherAPI/opendata/tcTrack.php?dataType=json',
                      timeout=10, headers=HDRS)
     r.raise_for_status()
     data = r.json()
@@ -271,7 +277,7 @@ def _fetch_hko(storm_name):
 
 def _fetch_cma(storm_name):
     """CMA typhoon.nmc.cn public JSON (unofficial) — forecast by 'BABJ' agency."""
-    r = requests.get('http://typhoon.nmc.cn/weatherservice/typhon/jsons/list_default',
+    r = _http_get('http://typhoon.nmc.cn/weatherservice/typhon/jsons/list_default',
                      timeout=10, headers=HDRS)
     r.raise_for_status()
     m = _re.search(r'\((\{.*\})\)', r.text, _re.S)   # strip JSONP wrapper
@@ -284,7 +290,7 @@ def _fetch_cma(storm_name):
         if not any(isinstance(v, str) and v.upper() == storm_name.upper() for v in entry):
             continue
         tid = entry[0]
-        vr = requests.get(f'http://typhoon.nmc.cn/weatherservice/typhon/jsons/view_{tid}',
+        vr = _http_get(f'http://typhoon.nmc.cn/weatherservice/typhon/jsons/view_{tid}',
                           timeout=10, headers=HDRS)
         vr.raise_for_status()
         vm = _re.search(r'\((\{.*\})\)', vr.text, _re.S)
@@ -321,7 +327,7 @@ def _fetch_cwb(storm_name):
     key = os.environ.get('CWA_API_KEY')
     if not key:
         return None
-    r = requests.get('https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-005',
+    r = _http_get('https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-005',
                      params={'Authorization': key, 'format': 'JSON'},
                      timeout=10, headers=HDRS)
     r.raise_for_status()
