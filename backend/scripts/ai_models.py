@@ -719,14 +719,27 @@ def run_forecast(track_history: list, steps: int = FORECAST_STEPS) -> dict:
             return _run_ml_forecast(track_history, steps)
         except Exception as exc:
             logger.warning("ML forecast failed (%s); falling back to physics.", exc)
-            # TEMPORARY diagnostic, to be reverted once the deployed TFLite
-            # path is confirmed working: Vercel gives no log access from
-            # here, so surface the actual exception in the response itself
-            # rather than guessing blind. Not a permanent behavior.
             result = _run_physics_forecast(track_history, steps)
-            import traceback
-            result["_debug_ml_error"] = f"{type(exc).__name__}: {exc}"
-            result["_debug_ml_traceback"] = traceback.format_exc()
+            # TEMPORARY diagnostic, to be reverted immediately once the
+            # deployed TFLite path is confirmed working: Vercel gives no
+            # log access from here. Exception class name only, no message
+            # or traceback -- avoids echoing internal details to a public
+            # endpoint while still being enough to identify the failure.
+            result["_debug_ml_error_type"] = type(exc).__name__
             return result
 
-    return _run_physics_forecast(track_history, steps)
+    # TEMPORARY diagnostic (see above): when the ML path is skipped
+    # entirely, show what the deployed function actually sees on disk --
+    # names only, no paths or content.
+    result = _run_physics_forecast(track_history, steps)
+    result["_debug_ml_available"] = _ml_available()
+    result["_debug_lstm_files_seen"] = {
+        "h5": os.path.exists(LSTM_PATH),
+        "keras": os.path.exists(LSTM_PATH_K),
+        "tflite": os.path.exists(LSTM_PATH_TFLITE),
+    }
+    try:
+        result["_debug_models_dir_listing"] = sorted(os.listdir(MODELS_DIR))
+    except Exception:
+        result["_debug_models_dir_listing"] = None
+    return result
