@@ -135,7 +135,12 @@ const MAP_HTML = `<!DOCTYPE html><html><head>
 
   var map = L.map('map',{zoomControl:true,attributionControl:false}).setView([15,128],5);
   var tiles = {
-    dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19}),
+    // CARTO's free basemap CDN now gates unregistered domains behind an API
+    // key (serves an "API KEY REQUIRED" watermark tile instead of the map —
+    // same issue already fixed on web, see frontend/lib/constants.ts).
+    // Esri's Dark Gray Canvas needs no key, same provider as the satellite
+    // tile below, and is already proven working here.
+    dark: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:17}),
     satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:17})
   };
   var curBase = 'dark';
