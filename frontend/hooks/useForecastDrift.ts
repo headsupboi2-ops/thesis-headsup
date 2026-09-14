@@ -79,7 +79,7 @@ export function useForecastDrift(
 
     for (const storm of storms) {
       const name = storm.info.name
-      const aiTrack = modelTracks[name]?.find(t => t.model === 'AI_ENSEMBLE')
+      const aiTrack = modelTracks[name]?.find(t => t.model === 'AI_ENSEMBLE' && t.source === 'live')
       let existing = state.snapshots[name] ?? []
 
       if (aiTrack?.points.length && shouldCaptureSnapshot(existing, now)) {

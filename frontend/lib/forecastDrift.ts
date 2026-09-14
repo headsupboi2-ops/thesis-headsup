@@ -107,11 +107,11 @@ export function computeDrift(
   const predicted = interpolateTrackAt(snapshot.points, leadHoursExact)
   if (!predicted) return null
 
-  const driftKm = haversineKm(predicted.lat, predicted.lon, actual.lat, actual.lon)
+  const driftKmRaw = haversineKm(predicted.lat, predicted.lon, actual.lat, actual.lon)
+  const driftKmRounded = Math.round(driftKmRaw)
   const heading = headingFromBearing(bearingDeg(predicted, actual))
-  const level = levelFromDriftKm(driftKm)
+  const level = levelFromDriftKm(driftKmRounded)
   const leadHours = Math.round(leadHoursExact)
-  const driftKmRounded = Math.round(driftKm)
 
   const headline = level === 'on-track'
     ? `Tracking within ${driftKmRounded}km of the +${leadHours}h forecast.`
