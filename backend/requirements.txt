@@ -10,8 +10,11 @@
 # If a live endpoint ever needs it, add it back deliberately.
 #
 # tensorflow itself is still NOT listed here (>250 MB, most of the entire
-# 500 MB budget on its own) — the LSTM path model runs via tflite-runtime
-# instead: a ~2.4 MB interpreter for a model converted offline by
+# 500 MB budget on its own) — the LSTM path model runs via ai-edge-litert
+# instead: a ~21 MB interpreter (Google's current TFLite runtime package —
+# tflite-runtime, tried first, turned out to have stopped publishing wheels
+# past Python 3.11, which silently broke the Vercel build since its default
+# runtime is 3.12) for a model converted offline by
 # scripts/convert_to_tflite.py (see ai_models.py's _TFLiteLSTM). scikit-learn
 # and joblib are likewise not listed: the two LSTM scalers are applied via a
 # pure-numpy port of their transform math (ai_models.py's
@@ -25,4 +28,4 @@ beautifulsoup4>=4.12,<5
 numpy>=1.24,<2
 python-dateutil>=2.9,<3
 pytz>=2024.1
-tflite-runtime>=2.14,<3
+ai-edge-litert>=1.0,<3

@@ -161,8 +161,15 @@ class _TFLiteLSTM:
     converted TFLite interpreter instead of full TensorFlow.
 
     Used only when `tensorflow` isn't importable (e.g. on Vercel, which
-    ships tflite-runtime -- about 2.4 MB -- instead of the 250 MB+ full
+    ships ai-edge-litert -- about 21 MB -- instead of the 250 MB+ full
     framework that was the actual reason ML forecasting was disabled there).
+    ai-edge-litert is Google's current, actively-maintained TFLite
+    interpreter package (the successor to tflite-runtime, which stopped
+    publishing wheels at Python 3.11 -- exactly the mismatch that broke the
+    first version of this fix against Vercel's Python 3.12 runtime). Same
+    Interpreter API, confirmed by inspecting its actual method list before
+    switching, not assumed from the name alone.
+
     Converted offline by scripts/convert_to_tflite.py, which also verifies
     the converted model matches the original Keras model's output within
     ~1e-6 (float32 rounding noise) across 20 random physically-plausible
@@ -170,8 +177,8 @@ class _TFLiteLSTM:
     """
 
     def __init__(self, path):
-        import tflite_runtime.interpreter as tflite
-        self._interp = tflite.Interpreter(model_path=path)
+        from ai_edge_litert.interpreter import Interpreter
+        self._interp = Interpreter(model_path=path)
         self._interp.allocate_tensors()
         self._in  = self._interp.get_input_details()[0]
         self._out = self._interp.get_output_details()[0]
