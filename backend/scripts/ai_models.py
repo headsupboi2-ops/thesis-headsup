@@ -42,9 +42,11 @@ _ROOT       = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR  = os.path.join(_ROOT, "models")
 LSTM_PATH        = os.path.join(MODELS_DIR, "lstm_path_model.h5")
 LSTM_PATH_K      = os.path.join(MODELS_DIR, "lstm_path_model.keras")
+LSTM_PATH_TFLITE = os.path.join(MODELS_DIR, "lstm_path_model.tflite")
 RF_PATH          = os.path.join(MODELS_DIR, "rf_wind_model.pkl")
 LSTM_SCALER      = os.path.join(MODELS_DIR, "lstm_scaler.pkl")
 LSTM_RESID_SCALER = os.path.join(MODELS_DIR, "lstm_resid_scaler.pkl")
+LSTM_SCALERS_JSON = os.path.join(MODELS_DIR, "lstm_scalers.json")
 LSTM_META        = os.path.join(MODELS_DIR, "lstm_meta.json")
 RF_SCALER        = os.path.join(MODELS_DIR, "rf_scaler.pkl")
 
@@ -131,8 +133,10 @@ def _clip_state(state):
 # ML loaders
 # ---------------------------------------------------------------------------
 def _lstm_available() -> bool:
-    """LSTM path model present -> ML track prediction is possible."""
-    return any(os.path.exists(p) for p in (LSTM_PATH, LSTM_PATH_K))
+    """LSTM path model present -> ML track prediction is possible.
+    Includes the TFLite conversion, since it's a full substitute for the
+    Keras model on environments without TensorFlow (see _load_lstm)."""
+    return any(os.path.exists(p) for p in (LSTM_PATH, LSTM_PATH_K, LSTM_PATH_TFLITE))
 
 
 def _rf_wind_available() -> bool:
@@ -150,16 +154,61 @@ def _ml_available() -> bool:
     return _lstm_available()
 
 
+class _TFLiteLSTM:
+    """
+    Thin wrapper presenting the same .predict()/.input_shape interface the
+    rollouts below already expect from a Keras model, backed by the tiny
+    converted TFLite interpreter instead of full TensorFlow.
+
+    Used only when `tensorflow` isn't importable (e.g. on Vercel, which
+    ships tflite-runtime -- about 2.4 MB -- instead of the 250 MB+ full
+    framework that was the actual reason ML forecasting was disabled there).
+    Converted offline by scripts/convert_to_tflite.py, which also verifies
+    the converted model matches the original Keras model's output within
+    ~1e-6 (float32 rounding noise) across 20 random physically-plausible
+    input windows before ever being committed.
+    """
+
+    def __init__(self, path):
+        import tflite_runtime.interpreter as tflite
+        self._interp = tflite.Interpreter(model_path=path)
+        self._interp.allocate_tensors()
+        self._in  = self._interp.get_input_details()[0]
+        self._out = self._interp.get_output_details()[0]
+        # e.g. [1, 8, 4] -> report as (None, 8, 4), matching the Keras
+        # convention the callers already rely on (input_shape[1] for T).
+        self.input_shape = (None,) + tuple(self._in["shape"][1:])
+
+    def predict(self, x, verbose=0):
+        x = np.asarray(x, dtype=self._in["dtype"])
+        # The converted graph carries the LSTM's recurrent state as resource
+        # variables. Each call here is one independent forecast window, never
+        # a continuation of a previous call, so they must be reset every
+        # time -- without this, invoke() either errors on an uninitialized
+        # variable or silently carries state across unrelated windows.
+        self._interp.reset_all_variables()
+        self._interp.set_tensor(self._in["index"], x)
+        self._interp.invoke()
+        return self._interp.get_tensor(self._out["index"])
+
+
 def _load_lstm():
     global _lstm
     if _lstm is not None:
         return _lstm
-    import tensorflow as tf
-    for path in (LSTM_PATH, LSTM_PATH_K):
-        if os.path.exists(path):
-            _lstm = tf.keras.models.load_model(path, compile=False)
-            logger.info("LSTM loaded: %s  input_shape=%s", path, _lstm.input_shape)
-            return _lstm
+    try:
+        import tensorflow as tf
+        for path in (LSTM_PATH, LSTM_PATH_K):
+            if os.path.exists(path):
+                _lstm = tf.keras.models.load_model(path, compile=False)
+                logger.info("LSTM loaded (Keras): %s  input_shape=%s", path, _lstm.input_shape)
+                return _lstm
+    except ImportError:
+        pass   # TensorFlow unavailable (e.g. Vercel) -- fall through to TFLite.
+    if os.path.exists(LSTM_PATH_TFLITE):
+        _lstm = _TFLiteLSTM(LSTM_PATH_TFLITE)
+        logger.info("LSTM loaded (TFLite): %s  input_shape=%s", LSTM_PATH_TFLITE, _lstm.input_shape)
+        return _lstm
     raise RuntimeError(f"LSTM not found in {MODELS_DIR}")
 
 
@@ -173,7 +222,63 @@ def _load_rf():
     return _rf
 
 
+class _JsonMinMaxScaler:
+    """Pure-numpy stand-in for sklearn.preprocessing.MinMaxScaler, built from
+    parameters extracted offline (scripts/convert_to_tflite.py). Avoids
+    pulling in scikit-learn (~9 MB) on Vercel just to apply what is,
+    underneath, two array subtractions and a divide."""
+
+    def __init__(self, params):
+        self.data_min_ = np.array(params["data_min_"], dtype=np.float64)
+        self.data_max_ = np.array(params["data_max_"], dtype=np.float64)
+        self.feature_range = tuple(params["feature_range"])
+
+    def transform(self, x):
+        lo, hi = self.feature_range
+        span = self.data_max_ - self.data_min_
+        span = np.where(span == 0, 1.0, span)
+        return (np.asarray(x, dtype=np.float64) - self.data_min_) / span * (hi - lo) + lo
+
+
+class _JsonStandardScaler:
+    """Pure-numpy stand-in for sklearn.preprocessing.StandardScaler, same
+    rationale as _JsonMinMaxScaler above."""
+
+    def __init__(self, params):
+        self.mean_  = np.array(params["mean_"], dtype=np.float64)
+        self.scale_ = np.array(params["scale_"], dtype=np.float64)
+
+    def inverse_transform(self, x):
+        return np.asarray(x, dtype=np.float64) * self.scale_ + self.mean_
+
+
+def _load_scalers_from_json():
+    """Scikit-learn-free fallback for the two LSTM scalers, used when the
+    real pickled sklearn objects can't be loaded (joblib and/or scikit-learn
+    not installed -- e.g. Vercel, which ships tflite-runtime instead of the
+    full ML stack). Parameters were extracted once, offline, by
+    scripts/convert_to_tflite.py.
+
+    No such fallback exists for the RF wind scaler: RF_PATH
+    ("rf_wind_model.pkl") doesn't exist anywhere in this repo today, so that
+    path is already always the Rankine-vortex physics model, in every
+    environment, regardless of this fallback."""
+    global _lstm_scaler, _lstm_resid_scaler
+    if not os.path.exists(LSTM_SCALERS_JSON):
+        return
+    import json
+    with open(LSTM_SCALERS_JSON, "r", encoding="utf-8") as f:
+        params = json.load(f)
+    if _lstm_scaler is None and "lstm_scaler" in params:
+        _lstm_scaler = _JsonMinMaxScaler(params["lstm_scaler"])
+    if _lstm_resid_scaler is None and "lstm_resid_scaler" in params:
+        _lstm_resid_scaler = _JsonStandardScaler(params["lstm_resid_scaler"])
+
+
 def _load_scalers():
+    """joblib.load below deserializes our own first-party trained artifacts
+    (committed to this repo, produced by train_lstm.py) -- not data from an
+    untrusted source."""
     global _lstm_scaler, _rf_scaler, _lstm_resid_scaler
     try:
         import joblib
@@ -184,7 +289,11 @@ def _load_scalers():
         if _rf_scaler is None and os.path.exists(RF_SCALER):
             _rf_scaler   = joblib.load(RF_SCALER)
     except Exception as exc:
-        logger.warning("Scaler load failed, using hardcoded ranges: %s", exc)
+        logger.warning("Scaler load failed (%s); trying the JSON fallback.", exc)
+        try:
+            _load_scalers_from_json()
+        except Exception as exc2:
+            logger.warning("JSON scaler fallback also failed, using hardcoded ranges: %s", exc2)
 
 
 def _load_meta():

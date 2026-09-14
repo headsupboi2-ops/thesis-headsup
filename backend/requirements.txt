@@ -1,5 +1,6 @@
-# Vercel-compatible dependencies (no TensorFlow — physics fallback mode is used)
-# For local dev with full ML models, use requirements_local.txt instead.
+# Vercel-compatible dependencies.
+# For local dev with the full TensorFlow/scikit-learn stack, use
+# requirements_local.txt instead.
 #
 # pandas is deliberately NOT listed: it is unused by app.py and every module it
 # actually imports (ai_models.py, multi_model_tracks.py, typhoon_scraper.py) —
@@ -7,6 +8,15 @@
 # offline tools that never run on Vercel. Its manylinux wheel was the single
 # biggest contributor to the Python function exceeding the 500 MB bundle limit.
 # If a live endpoint ever needs it, add it back deliberately.
+#
+# tensorflow itself is still NOT listed here (>250 MB, most of the entire
+# 500 MB budget on its own) — the LSTM path model runs via tflite-runtime
+# instead: a ~2.4 MB interpreter for a model converted offline by
+# scripts/convert_to_tflite.py (see ai_models.py's _TFLiteLSTM). scikit-learn
+# and joblib are likewise not listed: the two LSTM scalers are applied via a
+# pure-numpy port of their transform math (ai_models.py's
+# _JsonMinMaxScaler/_JsonStandardScaler) rather than unpickling the real
+# sklearn objects.
 Flask>=2.3,<4
 Werkzeug>=2.3,<4
 flask-cors>=4,<7
@@ -15,3 +25,4 @@ beautifulsoup4>=4.12,<5
 numpy>=1.24,<2
 python-dateutil>=2.9,<3
 pytz>=2024.1
+tflite-runtime>=2.14,<3

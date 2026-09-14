@@ -9,7 +9,7 @@
       "entrypoint": "app:app",
       "functions": {
         "app.py": {
-          "excludeFiles": "{models/**,__pycache__/**,scripts/typhoon_scraper_deprecated.py,scripts/train_lstm.py,scripts/backtest.py,*.bat,*.sh,*.spec,README*.md,requirements_local.txt,requirements_web.txt}"
+          "excludeFiles": "{models/typhoon_rf_intensity_classifier.pkl,models/lstm_path_model.h5,models/lstm_path_model.keras,models/lstm_scaler.pkl,models/lstm_resid_scaler.pkl,models/README.txt,__pycache__/**,scripts/typhoon_scraper_deprecated.py,scripts/train_lstm.py,scripts/backtest.py,scripts/convert_to_tflite.py,*.bat,*.sh,*.spec,README*.md,requirements_local.txt,requirements_web.txt}"
         }
       }
     }
