@@ -719,5 +719,14 @@ def run_forecast(track_history: list, steps: int = FORECAST_STEPS) -> dict:
             return _run_ml_forecast(track_history, steps)
         except Exception as exc:
             logger.warning("ML forecast failed (%s); falling back to physics.", exc)
+            # TEMPORARY diagnostic, to be reverted once the deployed TFLite
+            # path is confirmed working: Vercel gives no log access from
+            # here, so surface the actual exception in the response itself
+            # rather than guessing blind. Not a permanent behavior.
+            result = _run_physics_forecast(track_history, steps)
+            import traceback
+            result["_debug_ml_error"] = f"{type(exc).__name__}: {exc}"
+            result["_debug_ml_traceback"] = traceback.format_exc()
+            return result
 
     return _run_physics_forecast(track_history, steps)
