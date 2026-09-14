@@ -132,7 +132,7 @@ export function ImpactReport() {
         <div className="flex items-center gap-2.5">
           <Home className="w-6 h-6 text-[#0052cc]" />
           <div className="flex flex-col leading-tight">
-            <span className="text-sm font-extrabold text-slate-800 tracking-tight">My Area — Will it hit me?</span>
+            <span className="text-sm font-extrabold text-slate-800 tracking-tight">My Area: Will it hit me?</span>
             <span className="text-[9px] text-slate-400 uppercase tracking-widest">Personal impact from the 10-model ensemble</span>
           </div>
         </div>
@@ -226,12 +226,12 @@ function RiskHero({ impact, city }: { impact: Impact; city: string }) {
 
 function MetricsRow({ impact }: { impact: Impact }) {
   const eta = impact.etaEarliest
-  const etaText = eta == null ? '—' : eta < 24 ? `~${eta}h` : `~${Math.floor(eta / 24)}d ${eta % 24}h`
+  const etaText = eta == null ? 'N/A' : eta < 24 ? `~${eta}h` : `~${Math.floor(eta / 24)}d ${eta % 24}h`
   return (
     <div className="grid grid-cols-3 gap-3">
       <Metric icon={<Navigation size={15} />} label="Closest approach" value={`${impact.closestKm} km`} />
       <Metric icon={<Clock size={15} />} label="Arrives in" value={etaText} />
-      <Metric icon={<AlertTriangle size={15} />} label="Expected signal" value={impact.tcws?.short ?? '—'} color={impact.tcws?.color} />
+      <Metric icon={<AlertTriangle size={15} />} label="Expected signal" value={impact.tcws?.short ?? 'N/A'} color={impact.tcws?.color} />
     </div>
   )
 }
@@ -358,7 +358,7 @@ function FloodSurgeCard({ points, hours, lat, lon, susceptibility, exposure, imp
               Storm surge{surge.level !== 'none' && exposure !== 'none' ? ` · ${surge.band}` : ''}
             </div>
             <div className="text-slate-500 text-sm mt-0.5">
-              {exposure === 'none' ? 'Inland — no coastal surge risk'
+              {exposure === 'none' ? 'Inland, no coastal surge risk'
                 : surge.level === 'none' ? 'No significant surge expected'
                 : `Surge up to ${surge.band} possible on exposed coast`}
             </div>
@@ -381,7 +381,7 @@ function FloodSurgeCard({ points, hours, lat, lon, susceptibility, exposure, imp
               </div>
               <div className="text-slate-400 text-xs mt-1">
                 {tidalInfluence > 0.05
-                  ? 'A high tide holds the river up and slows drainage — the same rain floods worse.'
+                  ? 'A high tide holds the river up and slows drainage, the same rain floods worse.'
                   : 'This barangay sits above the tidal reach, so the tide does not affect it.'}
               </div>
             </div>

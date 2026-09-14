@@ -64,7 +64,7 @@ export function recommendedAction(status: ParAlertStatus, tcws: Tcws | null, thr
   if (sig === 3) return 'Prepare to evacuate. Secure your home; avoid rivers, coasts and low-lying areas.'
   if (sig >= 1) return 'Ready an emergency kit and secure loose items. Monitor official updates.'
   if (status === 'inside' || status === 'approaching') return 'Monitor updates closely and prepare emergency supplies.'
-  return 'Stay informed — a storm is near the PAR.'
+  return 'Stay informed, a storm is near the PAR.'
 }
 
 export function computeParAlerts(

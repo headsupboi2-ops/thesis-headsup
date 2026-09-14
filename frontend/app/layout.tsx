@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Storm Forecasting — Real-Time PAR Dashboard',
+  title: 'Storm Forecasting: Real-Time PAR Dashboard',
   description: 'Interactive weather forecasting for the Philippine Area of Responsibility',
 }
 

@@ -131,7 +131,7 @@ export function LeftPanel() {
         <p className="text-[10px] font-bold text-[#0052cc] uppercase tracking-widest mb-0.5">
           Historical Storm Browser
         </p>
-        <p className="text-[10px] text-slate-400 mb-3">IBTrACS Archive 2013–2026</p>
+        <p className="text-[10px] text-slate-400 mb-3">IBTrACS Archive 2013-2026</p>
 
         {/* Year selector with chevron buttons */}
         <div className="flex items-center justify-between mb-3">
@@ -241,7 +241,7 @@ export function LeftPanel() {
           <div className="flex flex-col gap-0.5 mb-3">
             <StatRow
               icon={<Activity size={10} />} label="Category"
-              value={`${CAT_LABEL[cat]} — ${CAT_NAME[cat]}`}
+              value={`${CAT_LABEL[cat]}: ${CAT_NAME[cat]}`}
               color={CAT_COLOR[cat]}
             />
             <StatRow

@@ -37,7 +37,7 @@ export function DemoScenario() {
                    rounded-full px-4 py-1 text-[11px] font-bold text-white shadow-lg animate-pulse"
         style={{ background: 'linear-gradient(90deg,#7c3aed,#a21caf)' }}
       >
-        🎬 DEMO SCENARIO — historical replay: {demo.displayName}
+        🎬 DEMO SCENARIO: historical replay: {demo.displayName}
       </div>
 
       {/* Control panel */}
@@ -57,7 +57,7 @@ export function DemoScenario() {
         <div className="text-[11px] mt-0.5 font-bold"
           style={{ color: demo.statusLabel.startsWith('LANDFALL') ? '#ff6b6b'
             : demo.statusLabel.startsWith('INSIDE') ? '#ffd166' : '#9ecbff' }}>
-          {demo.statusLabel || '—'}
+          {demo.statusLabel || 'N/A'}
         </div>
 
         {/* progress */}

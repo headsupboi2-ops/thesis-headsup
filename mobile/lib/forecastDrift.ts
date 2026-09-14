@@ -115,7 +115,7 @@ export function computeDrift(
 
   const headline = level === 'on-track'
     ? `Tracking within ${driftKmRounded}km of the +${leadHours}h forecast.`
-    : `Now ${driftKmRounded}km ${heading} of where the +${leadHours}h forecast placed it — ` +
+    : `Now ${driftKmRounded}km ${heading} of where the +${leadHours}h forecast placed it, ` +
       (level === 'minor' ? 'minor drift.' : 'track has shifted.')
 
   return {
@@ -145,7 +145,7 @@ const DRIFT_NOTIFICATION_TITLE: Record<DriftLevel, string> = {
   'significant': '⚠️ Track has shifted',
 }
 
-/** Notification title for a drift check, e.g. "⚠️ Track has shifted — GONI". */
+/** Notification title for a drift check, e.g. "⚠️ Track has shifted: GONI". */
 export function driftNotificationTitle(check: DriftCheck): string {
-  return `${DRIFT_NOTIFICATION_TITLE[check.level]} — ${check.storm}`
+  return `${DRIFT_NOTIFICATION_TITLE[check.level]}: ${check.storm}`
 }

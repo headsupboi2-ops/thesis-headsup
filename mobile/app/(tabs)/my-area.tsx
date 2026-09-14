@@ -203,7 +203,7 @@ function RiskHero({ impact, city }: { impact: Impact; city: string }) {
 
 function MetricsRow({ impact }: { impact: Impact }) {
   const eta = impact.etaEarliest
-  const etaText = eta == null ? '—' : eta < 24 ? `~${eta}h` : `~${Math.floor(eta / 24)}d ${eta % 24}h`
+  const etaText = eta == null ? 'N/A' : eta < 24 ? `~${eta}h` : `~${Math.floor(eta / 24)}d ${eta % 24}h`
   const window = impact.etaEarliest != null && impact.etaLatest != null && impact.etaLatest !== impact.etaEarliest
     ? `to ${impact.etaLatest < 24 ? impact.etaLatest + 'h' : Math.floor(impact.etaLatest / 24) + 'd'}`
     : undefined
@@ -212,7 +212,7 @@ function MetricsRow({ impact }: { impact: Impact }) {
       <Metric icon="navigate-circle" label="Closest approach" value={`${impact.closestKm} km`} />
       <Metric icon="time" label="Arrives in" value={etaText} sub={window} />
       <Metric icon="warning" label="Expected signal"
-        value={impact.tcws?.short ?? '—'} color={impact.tcws?.color} />
+        value={impact.tcws?.short ?? 'N/A'} color={impact.tcws?.color} />
     </View>
   )
 }
@@ -355,7 +355,7 @@ function FloodSurgeCard({ grid, lat, lon, susceptibility, exposure, impact, area
           <View style={{ flex: 1 }}>
             <Text style={styles.floodTitle}>Storm surge{surge.level !== 'none' && exposure !== 'none' ? ` · ${surge.band}` : ''}</Text>
             <Text style={styles.floodDetail}>
-              {exposure === 'none' ? 'Inland — no coastal surge risk'
+              {exposure === 'none' ? 'Inland, no coastal surge risk'
                 : surge.level === 'none' ? 'No significant surge expected'
                 : `Surge up to ${surge.band} possible on exposed coast`}
             </Text>
@@ -378,7 +378,7 @@ function FloodSurgeCard({ grid, lat, lon, susceptibility, exposure, impact, area
               </Text>
               <Text style={styles.floodAdvice}>
                 {tidalInfluence > 0.05
-                  ? 'A high tide holds the river up and slows drainage — the same rain floods worse.'
+                  ? 'A high tide holds the river up and slows drainage, the same rain floods worse.'
                   : 'This barangay sits above the tidal reach, so the tide does not affect it.'}
               </Text>
             </View>

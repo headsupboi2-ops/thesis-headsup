@@ -53,7 +53,7 @@ export function FloodTimeline({ hours, extremes, peak, tidalInfluence, stationNa
           ? 'No rain on the radar in the next 24 hours.'
           : <>
               Peak risk <span className="font-bold" style={{ color: peakMeta.color }}>{hhmm(peak.ms)} · {peakMeta.word}</span>
-              {' — radar '}{peak.rain1h.toFixed(1)} mm/h, {peak.rainMm} mm/24h
+              {', radar '}{peak.rain1h.toFixed(1)} mm/h, {peak.rainMm} mm/24h
               {/* Only mention the tide where it actually moved the number —
                   quoting a tide for an upland barangay reads as a cause when it
                   had no effect. Level only: rising/falling is a separate question
@@ -83,7 +83,7 @@ export function FloodTimeline({ hours, extremes, peak, tidalInfluence, stationNa
                   rx={5} fill="none" stroke={m.color} strokeWidth={1.5} />
               )}
               <title>
-                {`${hhmm(h.ms)} — ${m.word}\n`}
+                {`${hhmm(h.ms)}: ${m.word}\n`}
                 {`Radar: ${h.rain1h.toFixed(1)} mm/h\n`}
                 {`24h accumulation: ${h.rainMm} mm\n`}
                 {h.tideM != null ? `Tide: ${h.tideM.toFixed(2)} m (×${h.factor.toFixed(2)})` : 'Tide: n/a'}

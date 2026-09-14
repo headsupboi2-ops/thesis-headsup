@@ -22,7 +22,7 @@ export function ForecastStrip({
             <Ionicons name={d.icon as keyof typeof Ionicons.glyphMap} size={20}
               color={active ? colors.primary : colors.textSoft} style={{ marginVertical: 3 }} />
             <Text style={[styles.temp, active && { color: colors.text }]}>
-              {Number.isFinite(d.tempHigh) ? `${d.tempHigh}°` : '—'}
+              {Number.isFinite(d.tempHigh) ? `${d.tempHigh}°` : 'N/A'}
               <Text style={styles.low}> {Number.isFinite(d.tempLow) ? `${d.tempLow}°` : ''}</Text>
             </Text>
             <View style={styles.rain}>

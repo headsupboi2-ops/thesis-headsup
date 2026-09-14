@@ -86,11 +86,11 @@ export function computeMovement(path: Array<{ lat: number; lon: number }>): Broa
 /** PAGASA Tropical Cyclone Wind Signal from sustained wind (2022 revision, km/h thresholds). */
 export function tcwsFromWind(windKt: number): BroadcastPacket['tcws'] {
   const kmh = windKt * 1.852
-  if (kmh >= 185) return { signal: 5, label: 'TCWS #5 — extreme, ≥185 km/h winds expected in path' }
-  if (kmh >= 118) return { signal: 4, label: 'TCWS #4 — very destructive typhoon-force winds in path' }
-  if (kmh >= 89)  return { signal: 3, label: 'TCWS #3 — destructive storm-force winds in path' }
-  if (kmh >= 62)  return { signal: 2, label: 'TCWS #2 — damaging gale-force winds in path' }
-  if (kmh >= 39)  return { signal: 1, label: 'TCWS #1 — strong winds possible in path' }
+  if (kmh >= 185) return { signal: 5, label: 'TCWS #5: extreme, ≥185 km/h winds expected in path' }
+  if (kmh >= 118) return { signal: 4, label: 'TCWS #4: very destructive typhoon-force winds in path' }
+  if (kmh >= 89)  return { signal: 3, label: 'TCWS #3: destructive storm-force winds in path' }
+  if (kmh >= 62)  return { signal: 2, label: 'TCWS #2: damaging gale-force winds in path' }
+  if (kmh >= 39)  return { signal: 1, label: 'TCWS #1: strong winds possible in path' }
   return null
 }
 
@@ -122,7 +122,7 @@ export function diffConsensus(prev: ConsensusSnapshot | null, curr: ConsensusSna
 
 export const CONSENSUS_TEXT: Record<ConsensusChange, string> = {
   narrowed: 'model tracks narrowing toward a specific landfall zone',
-  widened:  'model tracks diverging — landfall zone less certain',
+  widened:  'model tracks diverging, landfall zone less certain',
   shifted:  'consensus landfall zone has SHIFTED in the last 3 hours',
   steady:   'model consensus steady since last update',
 }
@@ -155,7 +155,7 @@ export function generateThreeHourUpdate(
     `${name} (Cat ${category}, ${Math.round(wind_speed)} kt) at ${lat.toFixed(1)}°N ${lon.toFixed(1)}°E`,
   ]
   if (movement) parts.push(`moving ${movement.heading} at ${movement.speedKmh} km/h`)
-  if (tcws) parts.push(`— ${tcws.label.split(' — ')[0]} warranted for areas in the path`)
+  if (tcws) parts.push(`: ${tcws.label.split(': ')[0]} warranted for areas in the path`)
   // How the agencies' agreement moved since the last packet. A widening or
   // shifting consensus is the whole point of a 3-hourly update: it tells
   // people whose plan was based on the old center line to re-check it.
@@ -266,7 +266,7 @@ export function useParBroadcastEngine(
         // Browser push notification per packet (permission handled by ParAlerts opt-in)
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           for (const p of fresh) {
-            try { new Notification(`PAR Hour ${p.hoursElapsed} — ${p.storm}`, { body: p.headline, tag: p.id }) } catch {}
+            try { new Notification(`PAR Hour ${p.hoursElapsed}: ${p.storm}`, { body: p.headline, tag: p.id }) } catch {}
           }
         }
       } else if (dirty) {

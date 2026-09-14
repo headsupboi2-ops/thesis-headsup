@@ -57,7 +57,7 @@ export function FloodAlert({ peak, areaLabel, tidalInfluence }: {
     if (grantedRef.current) {
       const meta = floodMeta(peak.level)
       scheduleLocalNotification(
-        `Flood risk rising — ${areaLabel}`,
+        `Flood risk rising: ${areaLabel}`,
         `${meta.word} by ${hhmm(peak.ms)} · ${peak.rainMm} mm/24h. ${meta.advice}`,
       )
     }
@@ -75,7 +75,7 @@ export function FloodAlert({ peak, areaLabel, tidalInfluence }: {
           <Ionicons name="warning" size={20} color="#fff" style={{ marginTop: 1 }} />
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>
-              Flood risk rising in {areaLabel} — {meta.word} by {hhmm(alert.ms)}
+              Flood risk rising in {areaLabel}: {meta.word} by {hhmm(alert.ms)}
             </Text>
             <Text style={styles.body}>
               {alert.rainMm} mm/24h forecast

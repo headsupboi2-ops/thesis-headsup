@@ -634,8 +634,8 @@ export function HurricaneTracker() {
       : dataFreshness.level === 'archive' ? ' · archive (no live feed)' : ''
   const statusMsg =
     fetchStatus === 'loading' ? 'Fetching storm data…' :
-    fetchStatus === 'empty'   ? 'No active storms — retrying…' :
-    fetchStatus === 'error'   ? 'Cannot reach backend — retrying…' :
+    fetchStatus === 'empty'   ? 'No active storms, retrying…' :
+    fetchStatus === 'error'   ? 'Cannot reach backend, retrying…' :
     fetchStatus === 'ok'      ? `${stormCount} storm${stormCount !== 1 ? 's' : ''} tracked${freshnessNote}` :
     null
 

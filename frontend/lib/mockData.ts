@@ -157,7 +157,7 @@ export function generateSeasonalOutlook(month: number, year: number): SeasonalOu
   }
   const mon = MONTHS[month]
   const note = month>=6&&month<=10 ? `${mon} is peak typhoon season.`
-    : month>=11||month<=2 ? `${mon} is off-season — late storms possible.`
+    : month>=11||month<=2 ? `${mon} is off-season, late storms possible.`
     : `${mon} is the pre-season build-up.`
   const historicalTracks = Array.from({ length: Math.ceil(avg*5) }, (_,k) => ({
     name: `${mon.slice(0,3).toUpperCase()}${k+1}`, year: 2013+(k%12),
@@ -169,7 +169,7 @@ export function generateSeasonalOutlook(month: number, year: number): SeasonalOu
     })).filter(p=>p.lat>=PAR.latMin&&p.lat<=PAR.latMax&&p.lon>=PAR.lonMin&&p.lon<=PAR.lonMax),
   }))
   return { month, monthName:mon, avgStorms:avg, maxStorms:Math.ceil(avg*1.9), maxYear:2016,
-    activityLevel:level, forecastText:`${mon} ${year} Seasonal Outlook\nBased on 12 years (2013–2024): avg ${avg.toFixed(1)} storms. ${level.toUpperCase()}. ${note}`,
+    activityLevel:level, forecastText:`${mon} ${year} Seasonal Outlook\nBased on 12 years (2013-2024): avg ${avg.toFixed(1)} storms. ${level.toUpperCase()}. ${note}`,
     trackDensity, historicalTracks }
 }
 

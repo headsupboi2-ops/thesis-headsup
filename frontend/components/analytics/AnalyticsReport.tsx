@@ -148,27 +148,27 @@ export function AnalyticsReport() {
 
 // ── How it works (the answer to "how are typhoons predicted?") ──────
 function HowItWorks({ perf }: { perf: ModelPerformance | null }) {
-  const trainSpan = perf ? `${perf.train_years[0]}–${perf.train_years[perf.train_years.length - 1]}` : '2013–2022'
-  const testSpan = perf ? `${perf.test_years[0]}–${perf.test_years[perf.test_years.length - 1]}` : '2023–2026'
+  const trainSpan = perf ? `${perf.train_years[0]}-${perf.train_years[perf.train_years.length - 1]}` : '2013-2022'
+  const testSpan = perf ? `${perf.test_years[0]}-${perf.test_years[perf.test_years.length - 1]}` : '2023-2026'
   const nStorms = perf?.n_test_storms ?? 67
 
   const steps = [
     {
       icon: <Satellite size={18} />, color: '#0052cc', title: '1 · We gather live data',
-      body: 'Every few minutes we pull each active storm’s position and strength from 10 official weather agencies — PAGASA, Japan (JMA), the US Navy (JTWC) and more — plus our own AI model.',
+      body: 'Every few minutes we pull each active storm’s position and strength from 10 official weather agencies, including PAGASA, Japan (JMA), and the US Navy (JTWC), plus our own AI model.',
     },
     {
       icon: <Brain size={18} />, color: '#7048c4', title: '2 · The AI learns from history',
-      body: `Our model studied ${trainSpan} — a decade of past typhoons — to learn how storms in our region tend to move and gain or lose strength. It uses those patterns to project the next 7 days.`,
+      body: `Our model studied ${trainSpan}, a decade of past typhoons, to learn how storms in our region tend to move and gain or lose strength. It uses those patterns to project the next 7 days.`,
     },
     {
       icon: <CheckCircle2 size={18} />, color: '#00875a', title: '3 · We measure how accurate it is',
-      body: `We then replayed ${nStorms} real typhoons from ${testSpan} — storms the model had never seen — and compared its forecasts to what actually happened. Those results are below.`,
+      body: `We then replayed ${nStorms} real typhoons from ${testSpan}, storms the model had never seen, and compared its forecasts to what actually happened. Those results are below.`,
     },
   ]
   return (
     <Section title="How a typhoon forecast is made"
-      subtitle="Three simple steps turn scattered weather data into a 7-day typhoon forecast — and let us prove how trustworthy it is.">
+      subtitle="Three simple steps turn scattered weather data into a 7-day typhoon forecast, and let us prove how trustworthy it is.">
       <div className="grid md:grid-cols-3 gap-3">
         {steps.map(s => (
           <div key={s.title} className="rounded-xl p-4" style={{ background: '#f8fafc', border: '1px solid #eef2f7' }}>
@@ -194,11 +194,11 @@ function KpiRow({ perf }: { perf: ModelPerformance }) {
       <StatTile label="Strength called right" value={(acc * 100).toFixed(0)} unit="%"
         sublabel="How often we correctly rate a storm's category"
         icon={<Target size={13} />} accent="#00875a" />
-      <StatTile label="Typical miss, 1 day out" value={lead24 ? `~${Math.round(lead24.mae)}` : '—'} unit="km"
+      <StatTile label="Typical miss, 1 day out" value={lead24 ? `~${Math.round(lead24.mae)}` : 'N/A'} unit="km"
         sublabel="How far our predicted centre sits from the real one"
         icon={<Crosshair size={13} />} />
       <StatTile label="Real typhoons tested" value={perf.n_test_storms.toString()}
-        sublabel={`Checked against ${perf.test_years[0]}–${perf.test_years[perf.test_years.length - 1]} storms`}
+        sublabel={`Checked against ${perf.test_years[0]}-${perf.test_years[perf.test_years.length - 1]} storms`}
         icon={<Activity size={13} />} accent="#7048c4" />
       <StatTile label="How far ahead we see" value={String(maxLead / 24)} unit="days"
         sublabel="Every forecast reaches a full week ahead"
@@ -222,7 +222,7 @@ function ErrorBanner({ message }: { message: string }) {
     <div className="rounded-xl px-4 py-3 text-white text-sm font-semibold flex items-center gap-2"
       style={{ background: 'linear-gradient(90deg,#a8210e,#cc2200)', boxShadow: '0 4px 16px rgba(200,0,0,0.3)' }}>
       <span>⚠</span>
-      Accuracy results aren&apos;t available yet — {message}.
+      Accuracy results aren&apos;t available yet: {message}.
     </div>
   )
 }
@@ -245,7 +245,7 @@ function TrackErrorSection({ perf }: { perf: ModelPerformance }) {
       <Takeaway>
         Forecasts are sharpest up close: about {hr6 ? `${Math.round(hr6.mae)} km` : 'tens of km'} off just
         6 hours ahead and roughly {day1 ? `${Math.round(day1.mae)} km` : 'a couple hundred km'} off a day ahead.
-        Like every weather service in the world, precision naturally decreases the further out we look — a storm
+        Like every weather service in the world, precision naturally decreases the further out we look: a storm
         a week away is inherently harder to pin down than one arriving tomorrow.
       </Takeaway>
     </Section>
@@ -266,7 +266,7 @@ function ClassificationSection({ perf }: { perf: ModelPerformance }) {
 
   return (
     <Section title="How well do we judge a storm's strength?" icon={<Target size={16} />}
-      subtitle="Beyond where a storm goes, we predict how strong it is — from a mild Tropical Depression up to a Super Typhoon. Here's how reliably we get each level right.">
+      subtitle="Beyond where a storm goes, we predict how strong it is, from a mild Tropical Depression up to a Super Typhoon. Here's how reliably we get each level right.">
       <div className="grid md:grid-cols-[auto_1fr] gap-6 items-center">
         <div className="flex gap-5 justify-center">
           <Gauge value={perf.classification.accuracy} label="Overall correct" color="#00875a" />
@@ -274,7 +274,7 @@ function ClassificationSection({ perf }: { perf: ModelPerformance }) {
         </div>
         <div>
           <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
-            Each bar is how reliably we identify that storm type (0–100). Bigger, more common storms are easiest;
+            Each bar is how reliably we identify that storm type (0-100). Bigger, more common storms are easiest;
             the rarest, most extreme ones are the hardest to label exactly.
           </p>
           <BarChart groups={groups} series={series} max={1} labelWidth={132}
@@ -286,7 +286,7 @@ function ClassificationSection({ perf }: { perf: ModelPerformance }) {
         The two dials show the headline: we correctly rate a storm&apos;s category about{' '}
         <b>{(perf.classification.accuracy * 100).toFixed(0)}%</b> of the time. Everyday storms like Tropical Storms
         and Typhoons score highest; the strongest Super Typhoons are rarer, so there&apos;s less data to learn their
-        exact threshold — though a dangerous storm is never mistaken for a calm one.
+        exact threshold, though a dangerous storm is never mistaken for a calm one.
       </Takeaway>
 
       {cmUrl && (
@@ -300,7 +300,7 @@ function ClassificationSection({ perf }: { perf: ModelPerformance }) {
             <div className="mt-3">
               <p className="text-[12px] text-slate-500 mb-2 leading-relaxed max-w-2xl">
                 Each row is what the storm <i>actually</i> was; each column is what we <i>predicted</i>. Bright squares
-                running down the diagonal are correct matches — the brighter and straighter that diagonal, the better.
+                running down the diagonal are correct matches: the brighter and straighter that diagonal, the better.
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={cmUrl} alt="Grid comparing predicted vs actual storm categories"
@@ -339,7 +339,7 @@ function LiveSection({ storms, outlook, ensemble }: {
           </p>
           {!storms && <SkeletonRows n={2} />}
           {storms && storms.storms.length === 0 && (
-            <p className="text-slate-400 text-xs">No active storms in the Western Pacific right now — all clear.</p>
+            <p className="text-slate-400 text-xs">No active storms in the Western Pacific right now, all clear.</p>
           )}
           <div className="flex flex-col gap-2">
             {storms?.storms.slice(0, 5).map(s => {

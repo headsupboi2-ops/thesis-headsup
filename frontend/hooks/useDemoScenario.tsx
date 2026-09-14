@@ -164,13 +164,13 @@ export function DemoScenarioProvider({ children }: { children: ReactNode }) {
     const inside = isInPar(p.lat, p.lon)
     if (inside && !wasInParRef.current) {
       notify('⚠ Typhoon entered the PAR',
-        `${displayName} is now inside the PAR — tracking toward Bicol / Naga.`)
+        `${displayName} is now inside the PAR, tracking toward Bicol / Naga.`)
     }
     wasInParRef.current = inside
     const dNaga = haversineKm(NAGA.lat, NAGA.lon, p.lat, p.lon)
     if (dNaga <= NEAR_NAGA_KM && !notifiedNagaRef.current) {
       notifiedNagaRef.current = true
-      notify('🌀 Landfall threat — Naga City',
+      notify('🌀 Landfall threat: Naga City',
         `${displayName} is ~${Math.round(dNaga)} km from Naga. Take precautions.`)
     }
   }, [active, index, points, displayName, notify])
@@ -217,8 +217,8 @@ export function DemoScenarioProvider({ children }: { children: ReactNode }) {
   const statusLabel = (() => {
     if (!current) return ''
     const d = haversineKm(NAGA.lat, NAGA.lon, current.lat, current.lon)
-    if (d <= NEAR_NAGA_KM) return `LANDFALL THREAT — ~${Math.round(d)} km from Naga`
-    if (isInPar(current.lat, current.lon)) return 'INSIDE PAR — heading toward Bicol'
+    if (d <= NEAR_NAGA_KM) return `LANDFALL THREAT: ~${Math.round(d)} km from Naga`
+    if (isInPar(current.lat, current.lon)) return 'INSIDE PAR: heading toward Bicol'
     return 'Approaching the PAR'
   })()
 

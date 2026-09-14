@@ -35,7 +35,7 @@ export function ModelLegend({ tracks }: { tracks: ModelTrack[] }) {
       <div className="flex items-center justify-between px-3 py-2"
         style={{ borderBottom: collapsed ? 'none' : '1px solid rgba(255,255,255,0.1)' }}>
         <span className="font-bold tracking-wide" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>
-          Forecast Models
+          Forecast Tracks
         </span>
         <button onClick={() => setCollapsed(c => !c)}
           style={{ background: 'none', border: 'none', color: '#9ab', cursor: 'pointer', fontSize: 12, lineHeight: 1 }}

@@ -45,7 +45,7 @@ export function FloodAlert({ peak, areaLabel, tidalInfluence }: {
     notifiedRef.current.add(key)
     if (notifPermission === 'granted') {
       try {
-        new Notification(`Flood risk rising — ${areaLabel}`, {
+        new Notification(`Flood risk rising: ${areaLabel}`, {
           body: `${floodMeta(peak.level).word} by ${hhmm(peak.ms)} · ${peak.rainMm} mm/24h. ${floodMeta(peak.level).advice}`,
           tag: key,           // a later alert for the same area+level replaces this one
           icon: '/favicon.ico',
@@ -71,7 +71,7 @@ export function FloodAlert({ peak, areaLabel, tidalInfluence }: {
             <AlertTriangle size={20} className="shrink-0 mt-0.5" />
             <div className="flex-1">
               <div className="font-extrabold text-sm">
-                Flood risk rising in {areaLabel} — {meta.word} by {hhmm(alert.ms)}
+                Flood risk rising in {areaLabel}: {meta.word} by {hhmm(alert.ms)}
               </div>
               <div className="text-[13px] mt-0.5" style={{ color: 'rgba(255,255,255,0.93)' }}>
                 {alert.rainMm} mm/24h forecast

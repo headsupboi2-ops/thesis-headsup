@@ -35,7 +35,7 @@ export function Badge({ label, color, filled = false }: { label: string; color: 
 }
 
 export function CategoryBadge({ category, filled }: { category: number; filled?: boolean }) {
-  return <Badge label={CAT_LABEL[category] ?? '—'} color={CAT_COLOR[category] ?? colors.textMuted} filled={filled} />
+  return <Badge label={CAT_LABEL[category] ?? 'N/A'} color={CAT_COLOR[category] ?? colors.textMuted} filled={filled} />
 }
 
 export function StatusDot({ color, size = 10 }: { color: string; size?: number }) {

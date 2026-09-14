@@ -37,7 +37,7 @@ function PacketDetails({ p }: { p: BroadcastPacket }) {
               p.consensusChange === 'narrowed' ? ' text-emerald-300' :
               p.consensusChange === 'steady' ? ' text-slate-400' : ' text-orange-300'
             }>
-              {' '}— {CONSENSUS_TEXT[p.consensusChange]}
+              {' '}: {CONSENSUS_TEXT[p.consensusChange]}
             </span>
           )}
         </div>
@@ -198,7 +198,7 @@ export function NotificationCenter({
         >
           <div className="flex items-center gap-2 px-3 py-2 bg-red-700/80">
             <span className="text-white text-[11px] font-extrabold uppercase tracking-wide">
-              Hour {toast.hoursElapsed} Update inside PAR — {toast.storm}
+              Hour {toast.hoursElapsed} Update inside PAR: {toast.storm}
             </span>
             <button onClick={onDismissToast} aria-label="Dismiss update toast"
               className="ml-auto text-white/80 hover:text-white text-xs cursor-pointer bg-transparent border-none">

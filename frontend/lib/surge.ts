@@ -15,9 +15,9 @@ export interface Surge {
 
 function band(m: number): string {
   if (m < 0.5) return '< 0.5 m'
-  if (m < 1.5) return '0.5–1.5 m'
-  if (m < 3) return '1.5–3 m'
-  if (m < 4) return '3–4 m'
+  if (m < 1.5) return '0.5-1.5 m'
+  if (m < 3) return '1.5-3 m'
+  if (m < 4) return '3-4 m'
   return '4 m+'
 }
 
@@ -27,7 +27,7 @@ function band(m: number): string {
 export function surgeRisk(
   peakWindKt: number, closestKm: number, etaH: number | null, exposure: CoastalExposure,
 ): Surge {
-  if (exposure === 'none') return { level: 'none', band: '—', etaH: null }        // inland
+  if (exposure === 'none') return { level: 'none', band: 'N/A', etaH: null }        // inland
   if (peakWindKt < 34 || closestKm > 300) return { level: 'none', band: band(0), etaH }
 
   // Rough surge height (m) from intensity — TS ~1 m, Cat1 ~2, Cat2 ~3, Cat3 ~4,

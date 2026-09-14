@@ -51,7 +51,7 @@ export function FloodTimeline({ hours, extremes, peak, tidalInfluence, stationNa
           ? 'No rain on the radar in the next 24 hours.'
           : <>
               Peak risk <Text style={{ color: peakMeta.color, fontWeight: '800' }}>{hhmm(peak.ms)} · {peakMeta.word}</Text>
-              {` — radar ${peak.rain1h.toFixed(1)} mm/h, ${peak.rainMm} mm/24h`}
+              {`, radar ${peak.rain1h.toFixed(1)} mm/h, ${peak.rainMm} mm/24h`}
               {hasTide && peak.tideM != null && tidalInfluence > 0.05
                 ? ` on a ${peak.tideM.toFixed(2)} m ${peak.tideNorm >= 0.5 ? 'high' : 'low'} tide`
                 : ''}.

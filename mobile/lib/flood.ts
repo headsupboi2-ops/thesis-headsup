@@ -175,10 +175,10 @@ export function peakHour(hours: FloodHour[]): FloodHour | null {
 }
 
 const FLOOD_META: Record<FloodLevel, { color: string; word: string; advice: string }> = {
-  severe:   { color: '#b026ff', word: 'Severe',   advice: 'Serious flooding expected — evacuate low-lying/riverside areas.' },
-  high:     { color: '#ff3b30', word: 'High',     advice: 'Flooding likely in low-lying areas — prepare to move valuables and go.' },
-  moderate: { color: '#ff9500', word: 'Moderate', advice: 'Localized flooding possible — watch water levels and advisories.' },
-  low:      { color: '#e1e100', word: 'Low',      advice: 'Minor pooling possible — stay aware.' },
+  severe:   { color: '#b026ff', word: 'Severe',   advice: 'Serious flooding expected: evacuate low-lying/riverside areas.' },
+  high:     { color: '#ff3b30', word: 'High',     advice: 'Flooding likely in low-lying areas: prepare to move valuables and go.' },
+  moderate: { color: '#ff9500', word: 'Moderate', advice: 'Localized flooding possible, watch water levels and advisories.' },
+  low:      { color: '#e1e100', word: 'Low',      advice: 'Minor pooling possible, stay aware.' },
   none:     { color: '#39d98a', word: 'Minimal',  advice: 'No significant rainfall flooding expected.' },
 }
 export const floodMeta = (l: FloodLevel) => FLOOD_META[l]

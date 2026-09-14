@@ -220,19 +220,19 @@ export const UNCERTAINTY_META: Record<UncertaintyLevel, {
     label: 'High confidence',
     short: 'TIGHT',
     color: '#34C759',
-    advice: 'Agencies agree closely on the track — plan around the forecast path.',
+    advice: 'Agencies agree closely on the track, plan around the forecast path.',
   },
   moderate: {
     label: 'Moderate uncertainty',
     short: 'SPREAD',
     color: '#FF9500',
-    advice: 'Agencies differ on where this lands — prepare even if you are off the center line.',
+    advice: 'Agencies differ on where this lands, prepare even if you are off the center line.',
   },
   high: {
     label: 'Low confidence',
     short: 'WIDE SPREAD',
     color: '#FF3B30',
-    advice: 'Forecasts disagree strongly — a wide area is at risk. Do not rely on the center line.',
+    advice: 'Forecasts disagree strongly, a wide area is at risk. Do not rely on the center line.',
   },
 }
 
@@ -240,7 +240,7 @@ export const UNCERTAINTY_META: Record<UncertaintyLevel, {
 export function uncertaintyText(s: UncertaintyScore): string {
   const m = UNCERTAINTY_META[s.level]
   const basis = s.simulated ? 'simulated spread' : `${s.liveCount} live feeds`
-  return `${m.label} — models spread ${s.spreadKm} km at +${s.atHour}h (${basis})`
+  return `${m.label}: models spread ${s.spreadKm} km at +${s.atHour}h (${basis})`
 }
 
 // ── Cone geometry ───────────────────────────────────────────────────

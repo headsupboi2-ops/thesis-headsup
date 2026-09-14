@@ -258,13 +258,13 @@ export function StormDataProvider({ children }: { children: ReactNode }) {
     const inside = isInPar(p.lat, p.lon)
     if (inside && !demoWasInParRef.current) {
       void scheduleLocalNotification('⚠️ Typhoon entered PAR',
-        `${demoName} is now inside the PAR — heading toward Bicol / Naga.`)
+        `${demoName} is now inside the PAR, heading toward Bicol / Naga.`)
     }
     demoWasInParRef.current = inside
     const dNaga = haversineKm(NAGA.lat, NAGA.lon, p.lat, p.lon)
     if (dNaga <= NEAR_NAGA_KM && !demoNagaRef.current) {
       demoNagaRef.current = true
-      void scheduleLocalNotification('🌀 Landfall threat — Naga City',
+      void scheduleLocalNotification('🌀 Landfall threat: Naga City',
         `${demoName} is ~${Math.round(dNaga)} km from Naga. Take precautions.`)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -276,8 +276,8 @@ export function StormDataProvider({ children }: { children: ReactNode }) {
   const demoStatus = (() => {
     if (!demoCurrent) return ''
     const d = haversineKm(NAGA.lat, NAGA.lon, demoCurrent.lat, demoCurrent.lon)
-    if (d <= NEAR_NAGA_KM) return `LANDFALL THREAT — ~${Math.round(d)} km from Naga`
-    if (isInPar(demoCurrent.lat, demoCurrent.lon)) return 'INSIDE PAR — heading toward Bicol'
+    if (d <= NEAR_NAGA_KM) return `LANDFALL THREAT: ~${Math.round(d)} km from Naga`
+    if (isInPar(demoCurrent.lat, demoCurrent.lon)) return 'INSIDE PAR: heading toward Bicol'
     return 'Approaching the PAR'
   })()
 

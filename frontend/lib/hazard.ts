@@ -39,7 +39,7 @@ export interface HazardArea {
 // `floodSusceptibility` because tide propagates along the channel, not across
 // the floodplain.
 export const NAGA_BARANGAYS: HazardArea[] = [
-  { name: 'Tabuco',              lat: 13.618, lon: 123.178, floodSusceptibility: 0.90, tidalInfluence: 0.90, coastalExposure: 'none', note: 'Naga riverbank — floods first' },
+  { name: 'Tabuco',              lat: 13.618, lon: 123.178, floodSusceptibility: 0.90, tidalInfluence: 0.90, coastalExposure: 'none', note: 'Naga riverbank, floods first' },
   { name: 'Triangulo',           lat: 13.626, lon: 123.188, floodSusceptibility: 0.90, tidalInfluence: 0.85, coastalExposure: 'none', note: 'Low-lying, chronic flooding' },
   { name: 'Mabolo',              lat: 13.615, lon: 123.180, floodSusceptibility: 0.85, tidalInfluence: 0.85, coastalExposure: 'none', note: 'Riverside, low-lying' },
   { name: 'Sabang',              lat: 13.617, lon: 123.183, floodSusceptibility: 0.85, tidalInfluence: 0.85, coastalExposure: 'none', note: 'Riverside' },
@@ -49,7 +49,7 @@ export const NAGA_BARANGAYS: HazardArea[] = [
   { name: 'Lerma',               lat: 13.619, lon: 123.186, floodSusceptibility: 0.80, tidalInfluence: 0.70, coastalExposure: 'none' },
   { name: 'Tinago',              lat: 13.620, lon: 123.190, floodSusceptibility: 0.80, tidalInfluence: 0.70, coastalExposure: 'none' },
   { name: 'Abella',              lat: 13.622, lon: 123.185, floodSusceptibility: 0.78, tidalInfluence: 0.65, coastalExposure: 'none' },
-  { name: 'Del Rosario',         lat: 13.640, lon: 123.175, floodSusceptibility: 0.78, tidalInfluence: 0.80, coastalExposure: 'none', note: 'Near Bicol River — closest to the bay' },
+  { name: 'Del Rosario',         lat: 13.640, lon: 123.175, floodSusceptibility: 0.78, tidalInfluence: 0.80, coastalExposure: 'none', note: 'Near Bicol River, closest to the bay' },
   { name: 'Bagumbayan Sur',      lat: 13.620, lon: 123.188, floodSusceptibility: 0.75, tidalInfluence: 0.60, coastalExposure: 'none' },
   { name: 'San Francisco',       lat: 13.622, lon: 123.186, floodSusceptibility: 0.75, tidalInfluence: 0.60, coastalExposure: 'none' },
   { name: 'Calauag',             lat: 13.628, lon: 123.175, floodSusceptibility: 0.72, tidalInfluence: 0.60, coastalExposure: 'none' },
@@ -64,7 +64,7 @@ export const NAGA_BARANGAYS: HazardArea[] = [
   { name: 'Cararayan',           lat: 13.650, lon: 123.230, floodSusceptibility: 0.28, tidalInfluence: 0.10, coastalExposure: 'none', note: 'Higher ground, east' },
   { name: 'Pacol',               lat: 13.640, lon: 123.245, floodSusceptibility: 0.22, tidalInfluence: 0.05, coastalExposure: 'none', note: 'Upland east' },
   { name: 'Carolina',            lat: 13.660, lon: 123.260, floodSusceptibility: 0.15, tidalInfluence: 0.00, coastalExposure: 'none', note: 'Mt Isarog foothills' },
-  { name: 'Panicuason',          lat: 13.665, lon: 123.280, floodSusceptibility: 0.10, tidalInfluence: 0.00, coastalExposure: 'none', note: 'Mt Isarog slopes — sheds water' },
+  { name: 'Panicuason',          lat: 13.665, lon: 123.280, floodSusceptibility: 0.10, tidalInfluence: 0.00, coastalExposure: 'none', note: 'Mt Isarog slopes, sheds water' },
 ]
 
 /** Bounding box + centre for the Naga barangay set, used to decide when a

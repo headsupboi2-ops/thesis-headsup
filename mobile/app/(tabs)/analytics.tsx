@@ -44,11 +44,11 @@ export default function AnalyticsScreen() {
         {/* How it works */}
         <Card>
           <SectionTitle title="How a typhoon forecast is made"
-            subtitle="Three steps turn scattered weather data into a 7-day forecast — and prove how trustworthy it is." />
+            subtitle="Three steps turn scattered weather data into a 7-day forecast, and prove how trustworthy it is." />
           {[
-            { icon: 'planet', color: colors.primary, t: 'We gather live data', b: 'Every few minutes we pull each storm’s position and strength from 10 official agencies — PAGASA, Japan, the US Navy and more — plus our own AI.' },
-            { icon: 'bulb', color: '#a78bfa', t: 'The AI learns from history', b: `Our model studied ${yrs(perf?.train_years, '2013–2022')} of past typhoons to learn how storms here move and strengthen, then projects the next 7 days.` },
-            { icon: 'checkmark-done', color: colors.success, t: 'We measure the accuracy', b: `We replayed ${perf?.n_test_storms ?? 67} real typhoons from ${yrs(perf?.test_years, '2023–2026')} it had never seen. Those results are below.` },
+            { icon: 'planet', color: colors.primary, t: 'We gather live data', b: 'Every few minutes we pull each storm’s position and strength from 10 official agencies, including PAGASA, Japan, and the US Navy, plus our own AI.' },
+            { icon: 'bulb', color: '#a78bfa', t: 'The AI learns from history', b: `Our model studied ${yrs(perf?.train_years, '2013-2022')} of past typhoons to learn how storms here move and strengthen, then projects the next 7 days.` },
+            { icon: 'checkmark-done', color: colors.success, t: 'We measure the accuracy', b: `We replayed ${perf?.n_test_storms ?? 67} real typhoons from ${yrs(perf?.test_years, '2023-2026')} it had never seen. Those results are below.` },
           ].map(s => (
             <View key={s.t} style={styles.step}>
               <View style={[styles.stepIcon, { backgroundColor: `${s.color}22` }]}>
@@ -62,7 +62,7 @@ export default function AnalyticsScreen() {
           ))}
         </Card>
 
-        {perfError && <ErrorNote message={`Accuracy results aren’t available yet — ${perfError}`} />}
+        {perfError && <ErrorNote message={`Accuracy results aren’t available yet: ${perfError}`} />}
         {!perf && !perfError && <Loading label="Loading accuracy results…" />}
 
         {perf && (
@@ -71,7 +71,7 @@ export default function AnalyticsScreen() {
             <View style={styles.kpiRow}>
               <StatTile label="Strength called right" value={(perf.classification.accuracy * 100).toFixed(0)} unit="%"
                 sublabel="How often we rate a storm’s category correctly" accent={colors.success} />
-              <StatTile label="Typical miss, 1 day out" value={day1 ? `~${Math.round(day1.mae)}` : '—'} unit="km"
+              <StatTile label="Typical miss, 1 day out" value={day1 ? `~${Math.round(day1.mae)}` : 'N/A'} unit="km"
                 sublabel="Distance from the real storm centre" />
               <StatTile label="Real typhoons tested" value={String(perf.n_test_storms)}
                 sublabel={`Checked against ${yrs(perf.test_years, '')} storms`} accent="#a78bfa" />
@@ -94,7 +94,7 @@ export default function AnalyticsScreen() {
             {/* Strength accuracy */}
             <Card>
               <SectionTitle title="How well do we judge strength?"
-                subtitle="We rate each storm from Tropical Depression up to Super Typhoon. Here’s how reliably we get each level right (0–100)." />
+                subtitle="We rate each storm from Tropical Depression up to Super Typhoon. Here’s how reliably we get each level right (0-100)." />
               <View style={styles.gaugeRow}>
                 <Gauge value={perf.classification.accuracy} label="Overall correct" color={colors.success} />
                 <Gauge value={perf.classification.macro_f1} label="All types, evenly" color={colors.primary} />
@@ -106,7 +106,7 @@ export default function AnalyticsScreen() {
               <Takeaway>
                 We correctly rate a storm’s category about <Text style={{ fontWeight: '800', color: colors.text }}>
                 {(perf.classification.accuracy * 100).toFixed(0)}%</Text> of the time. Everyday storms score highest;
-                the rarest Super Typhoons are hardest to label exactly — but a dangerous storm is never mistaken for a calm one.
+                the rarest Super Typhoons are hardest to label exactly, but a dangerous storm is never mistaken for a calm one.
               </Takeaway>
             </Card>
           </>
@@ -153,7 +153,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function yrs(arr: number[] | undefined, fallback: string) {
   if (!arr || !arr.length) return fallback
-  return `${arr[0]}–${arr[arr.length - 1]}`
+  return `${arr[0]}-${arr[arr.length - 1]}`
 }
 
 function activityStyle(level: string): { backgroundColor: string; borderColor: string; color: string } {

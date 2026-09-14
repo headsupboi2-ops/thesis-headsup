@@ -71,7 +71,7 @@ function DashboardShell() {
         {/* Center status */}
         <div className="flex-1 text-center">
           <span id="topbar-status" className="text-xs text-slate-400">
-            PAR Weather · 7-Day Forecast — Select a storm or scrub the timeline
+            PAR Weather · 7-Day Forecast: Select a storm or scrub the timeline
           </span>
         </div>
 

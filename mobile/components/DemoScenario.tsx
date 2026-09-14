@@ -31,7 +31,7 @@ export function DemoScenario() {
   return (
     <>
       <View style={styles.banner}>
-        <Text style={styles.bannerText}>🎬 DEMO — {d.demoName}</Text>
+        <Text style={styles.bannerText}>🎬 DEMO: {d.demoName}</Text>
       </View>
 
       <View style={styles.panel}>
@@ -41,7 +41,7 @@ export function DemoScenario() {
             <Ionicons name="close" size={16} color={colors.textMuted} />
           </Pressable>
         </View>
-        <Text style={[styles.status, { color: statusColor }]}>{d.demoStatus || '—'}</Text>
+        <Text style={[styles.status, { color: statusColor }]}>{d.demoStatus || 'N/A'}</Text>
 
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${pct}%` }]} />

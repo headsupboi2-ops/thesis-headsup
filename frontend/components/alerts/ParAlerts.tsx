@@ -66,7 +66,7 @@ export function recommendedAction(status: ParAlertStatus, tcws: Tcws | null, thr
   if (sig === 3) return 'Prepare to evacuate. Secure your home; avoid rivers, coasts and low-lying areas.'
   if (sig >= 1) return 'Ready an emergency kit and secure loose items. Monitor official updates.'
   if (status === 'inside' || status === 'approaching') return 'Monitor updates closely and prepare emergency supplies.'
-  return 'Stay informed — a storm is near the PAR.'
+  return 'Stay informed, a storm is near the PAR.'
 }
 
 interface StormLike {
@@ -170,10 +170,10 @@ function fmtEta(h: number) {
 function alertHeadline(a: ParAlert): string {
   if (a.headline) return a.headline
   if (a.status === 'inside')
-    return `${a.storm} HAS ENTERED PAR — Cat ${a.category} · ${a.windKt} kt`
+    return `${a.storm} HAS ENTERED PAR: Cat ${a.category} · ${a.windKt} kt`
   if (a.status === 'approaching')
-    return `${a.storm} may enter PAR in ${fmtEta(a.etaHours ?? 0)} — ${a.consensus!.entering}/${a.consensus!.total} models agree`
-  return `${a.storm} near PAR boundary — ${a.distanceKm} km away`
+    return `${a.storm} may enter PAR in ${fmtEta(a.etaHours ?? 0)}: ${a.consensus!.entering}/${a.consensus!.total} models agree`
+  return `${a.storm} near PAR boundary: ${a.distanceKm} km away`
 }
 
 /**
@@ -223,7 +223,7 @@ export function ParAlerts({ alerts, top = 92 }: { alerts: ParAlert[]; top?: numb
       if (notifiedRef.current.has(key)) continue
       notifiedRef.current.add(key)
       try {
-        new Notification(`PAR Alert — ${a.storm}`, {
+        new Notification(`PAR Alert: ${a.storm}`, {
           body: alertHeadline(a),
           tag: key,           // replaces older notification for the same transition
           icon: '/favicon.ico',

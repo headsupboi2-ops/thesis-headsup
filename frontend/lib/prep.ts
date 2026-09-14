@@ -7,16 +7,16 @@ export interface PrepAction { label: string; minSignal: number; leadHours: numbe
 export interface PrepItem { label: string; icon: string; by: Date; overdue: boolean; hoursToGo: number }
 
 const ACTIONS: PrepAction[] = [
-  { label: 'Pack a go-bag — papers, meds, cash, water',        minSignal: 1, leadHours: 24, icon: 'briefcase' },
+  { label: 'Pack a go-bag: papers, meds, cash, water',        minSignal: 1, leadHours: 24, icon: 'briefcase' },
   { label: 'Charge phones & power banks',                      minSignal: 1, leadHours: 18, icon: 'battery-charging' },
   { label: 'Store 3 days of water & food',                     minSignal: 2, leadHours: 24, icon: 'water' },
   { label: 'Fuel up vehicles; withdraw cash',                  minSignal: 2, leadHours: 18, icon: 'car' },
   { label: 'Reinforce windows & secure the roof',             minSignal: 2, leadHours: 12, icon: 'hammer' },
   { label: 'Move valuables above expected flood level',        minSignal: 3, leadHours: 18, icon: 'file-tray-stacked' },
   { label: 'Prepare to evacuate riverside / low-lying areas',  minSignal: 3, leadHours: 12, icon: 'exit' },
-  { label: 'Stay indoors — avoid all travel',                  minSignal: 3, leadHours: 6,  icon: 'home' },
+  { label: 'Stay indoors, avoid all travel',                  minSignal: 3, leadHours: 6,  icon: 'home' },
   { label: 'EVACUATE NOW if in a flood or storm-surge zone',   minSignal: 4, leadHours: 12, icon: 'warning' },
-  { label: 'Final shelter check — stay clear of windows',      minSignal: 4, leadHours: 3,  icon: 'shield-checkmark' },
+  { label: 'Final shelter check: stay clear of windows',      minSignal: 4, leadHours: 3,  icon: 'shield-checkmark' },
 ]
 
 /** Build the timeline for an expected signal + ETA (hours from `now`). */
