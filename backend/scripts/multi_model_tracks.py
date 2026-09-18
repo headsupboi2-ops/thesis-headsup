@@ -365,19 +365,6 @@ REAL_FETCHERS = {
 }
 
 
-def _track_heading_rad(base_track):
-    """Great-circle bearing (radians) from the track's first point to its
-    last. Falls back to 0 (north) for a degenerate/near-empty track."""
-    if len(base_track) < 2:
-        return 0.0
-    a, b = base_track[0], base_track[-1]
-    lat1, lon1 = math.radians(a['lat']), math.radians(a['lon'])
-    lat2, lon2 = math.radians(b['lat']), math.radians(b['lon'])
-    y = math.sin(lon2 - lon1) * math.cos(lat2)
-    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(lon2 - lon1)
-    return math.atan2(y, x)
-
-
 # ── Mock ensemble injector ───────────────────────────────────────────────────
 def generate_ensemble_spaghetti(base_track, model_id, storm_name):
     """
@@ -385,16 +372,12 @@ def generate_ensemble_spaghetti(base_track, model_id, storm_name):
 
     Seeded by storm+model so tracks are stable across refreshes: each model
     gets a fixed cross-track bias direction plus a smooth sinusoidal wobble,
-    both growing with lead time — tracks fan out ACROSS the track's own
-    heading, like a real "cone of uncertainty" (narrow near the storm,
-    widening along the path), rather than radiating in arbitrary directions
-    (which used to balloon the uncertainty cone into a lopsided blob).
+    both growing with lead time — tracks radiate outward like a real
+    multi-model uncertainty spread.
     """
     rnd = random.Random(f'{storm_name.upper()}:{model_id}')
-    heading = _track_heading_rad(base_track)
-    side = rnd.choice([-1, 1])
-    bias_dir = heading + side * math.radians(rnd.uniform(60, 120))  # roughly cross-track
-    bias_mag = rnd.uniform(0.15, 0.8)      # degrees of divergence at day 5
+    bias_dir = rnd.uniform(0, 2 * math.pi)
+    bias_mag = rnd.uniform(0.5, 2.2)       # degrees of divergence at day 5
     wob_amp = rnd.uniform(0.1, 0.45)
     wob_freq = rnd.uniform(0.6, 1.6)
     wob_phase = rnd.uniform(0, 2 * math.pi)
