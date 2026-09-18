@@ -11,7 +11,7 @@ import { useStormData } from '../../hooks/useStormData'
 import { fetchMultiModel } from '../../lib/api'
 import { fetchWeatherGrid, fetchMarineGrid, dailyForecast, type WeatherGrid, type MarineGrid, type DayForecast } from '../../lib/weather'
 import { susceptibilityAt } from '../../lib/hazard'
-import { coneRings, buildConePolygon, scoreUncertainty, UNCERTAINTY_META } from '../../lib/uncertainty'
+import { coneRings, coneCircles, scoreUncertainty, UNCERTAINTY_META } from '../../lib/uncertainty'
 import { isInPar } from '../../lib/par'
 import { WEATHER_LAYERS, WEATHER_LAYER_BY_ID, type WeatherLayerId, type BasemapId } from '../../lib/weatherLayers'
 import { colors, space, font, radius } from '../../lib/theme'
@@ -65,15 +65,15 @@ export default function MapScreen() {
   // shows without the user having to switch the spaghetti on first.
   const cones = useMemo(() => {
     if (!showCone) return []
-    const out: Array<{ ring: Array<[number, number]>; color: string; simulated: boolean }> = []
+    const out: Array<{ rings: Array<Array<[number, number]>>; color: string; simulated: boolean }> = []
     for (const s of storms) {
       const tracks = modelTracks[s.name]
       if (!tracks || tracks.length < 2) continue
-      const ring = buildConePolygon(coneRings(tracks, { lat: s.lat, lon: s.lon }))
-      if (!ring) continue
+      const rings = coneCircles(coneRings(tracks, { lat: s.lat, lon: s.lon }))
+      if (!rings.length) continue
       const score = scoreUncertainty(tracks, { applySplitRule: !isInPar(s.lat, s.lon) })
       out.push({
-        ring,
+        rings,
         color: UNCERTAINTY_META[score?.level ?? 'moderate'].color,
         simulated: score?.simulated ?? true,
       })

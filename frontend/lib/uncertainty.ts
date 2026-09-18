@@ -271,126 +271,48 @@ export function coneRings(tracks: ModelTrack[], origin?: LatLon): ConeRing[] {
   return rings
 }
 
-/** Arc resolution for the end caps and the joints between segments. */
-const CAP_STEPS = 10
-const JOINT_STEPS = 3
-
-/**
- * Points along a circle from `fromBearing`, sweeping `sweepDeg` (signed).
- *
- * The points are pushed out to the CIRCUMSCRIBED radius, so the chords
- * between them lie on or outside the true circle. Sampling the circle
- * exactly would inscribe the polygon, and a model sitting at precisely the
- * cone radius would then fall a few km outside the drawn outline.
- */
-function arcPoints(
-  center: LatLon, radiusKm: number, fromBearing: number, sweepDeg: number, steps: number,
-): LatLon[] {
-  const halfStep = Math.abs(sweepDeg) / steps / 2
+/** Points around a full circle at `radiusKm` from `center`, pushed out to
+ *  the CIRCUMSCRIBED radius so the chords lie on or outside the true
+ *  circle — a model sitting exactly at the cone radius then still falls
+ *  inside the drawn outline rather than a hair outside it. */
+function circlePoints(center: LatLon, radiusKm: number, steps: number): LatLon[] {
+  const halfStep = 180 / steps
   const r = radiusKm / Math.cos(halfStep * RAD)
   const out: LatLon[] = []
   for (let k = 0; k <= steps; k++) {
-    const b = (fromBearing + (sweepDeg * k) / steps + 720) % 360
-    out.push(destinationPoint(center, b, r))
+    out.push(destinationPoint(center, (k * 360) / steps, r))
   }
   return out
 }
 
-/** Signed difference between two bearings, in (-180, 180]. */
-function bearingDelta(from: number, to: number): number {
-  return ((to - from + 540) % 360) - 180
-}
+/** Circle resolution — enough points that a widened circle still reads as
+ *  round at typical map zoom levels. */
+const CIRCLE_STEPS = 24
 
 /**
- * Drop rings wholly swallowed by a neighbour. The union of the circles is
- * unchanged by removing them, and leaving them in breaks the external
- * tangent construction below (which needs the centers further apart than
- * the difference of the radii).
- */
-function pruneContainedRings(rings: ConeRing[]): ConeRing[] {
-  const out: ConeRing[] = []
-  for (const r of rings) {
-    const prev = out[out.length - 1]
-    if (prev) {
-      const d = haversineKm(prev.center.lat, prev.center.lon, r.center.lat, r.center.lon)
-      if (d + prev.radiusKm <= r.radiusKm) { out.pop() }        // prev inside r
-      else if (d + r.radiusKm <= prev.radiusKm) { continue }    // r inside prev
-    }
-    out.push(r)
-  }
-  return out
-}
-
-/**
- * Cone outline as a closed ring of [lat, lon] pairs.
+ * Cone outline as a sequence of per-hour circle rings, each a closed loop of
+ * [lat, lon] pairs. The union of these circles IS the cone: the storm could
+ * be anywhere within the radius of any forecast hour, so drawing every
+ * ring's circle (rather than a single clever outline around them) is both
+ * the simplest and the most literal rendering of that definition.
  *
- * The cone is the UNION of the per-hour uncertainty circles, not a
- * constant-width ribbon around the center line. A ribbon looks similar but
- * leaks: a model displaced along-track rather than across-track falls
- * outside it, which would break the one claim the cone makes — that every
- * agency's forecast lies inside.
+ * An earlier version traced ONE hull outline using external tangent lines
+ * between consecutive circles — visually seamless for a track moving in a
+ * roughly straight line, but it self-intersects into a wildly oversized
+ * blob when the track curves sharply (e.g. a storm recurving north into the
+ * westerlies, as PAR storms often do). A per-ring circle can never
+ * self-intersect regardless of how the track bends.
  *
- * The boundary is traced with external tangent lines between consecutive
- * circles (offset by asin(Δr/d) to account for the cone widening), joined
- * by short arcs, and closed with a cap at each end.
+ * Thinned to roughly a daily cadence (plus the very first and last ring) so
+ * the map isn't asked to render 20+ overlapping shapes per storm, which
+ * would read as dense banding rather than a smooth widening cone.
  */
-export function buildConePolygon(rings: ConeRing[]): Array<[number, number]> | null {
-  const r = pruneContainedRings(rings.filter(x => x.radiusKm >= 0))
-  if (r.length === 0) return null
-
-  // Degenerate case: one meaningful circle — return the circle itself.
-  if (r.length === 1) {
-    if (r[0].radiusKm <= 0) return null
-    return arcPoints(r[0].center, r[0].radiusKm, 0, 360, CAP_STEPS * 3)
-      .map(p => [p.lat, p.lon] as [number, number])
-  }
-
-  // Tangent bearings per segment: left = θ−90−α, right = θ+90+α.
-  const leftB: number[] = []
-  const rightB: number[] = []
-  for (let i = 0; i < r.length - 1; i++) {
-    const a = r[i], b = r[i + 1]
-    const d = haversineKm(a.center.lat, a.center.lon, b.center.lat, b.center.lon)
-    const th = bearingDeg(a.center, b.center)
-    const dr = b.radiusKm - a.radiusKm
-    const alpha = d > Math.abs(dr) ? Math.asin(dr / d) / RAD : 0
-    leftB.push((th - 90 - alpha + 360) % 360)
-    rightB.push((th + 90 + alpha + 360) % 360)
-  }
-
-  const left: LatLon[] = []
-  const right: LatLon[] = []
-  for (let i = 0; i < r.length - 1; i++) {
-    // Arc across the joint on circle i, so the outline never cuts a chord
-    // through a circle when the track bends.
-    if (i > 0 && r[i].radiusKm > 0) {
-      left.push(...arcPoints(r[i].center, r[i].radiusKm, leftB[i - 1],
-        bearingDelta(leftB[i - 1], leftB[i]), JOINT_STEPS))
-      right.push(...arcPoints(r[i].center, r[i].radiusKm, rightB[i - 1],
-        bearingDelta(rightB[i - 1], rightB[i]), JOINT_STEPS))
-    }
-    left.push(destinationPoint(r[i].center, leftB[i], r[i].radiusKm))
-    left.push(destinationPoint(r[i + 1].center, leftB[i], r[i + 1].radiusKm))
-    right.push(destinationPoint(r[i].center, rightB[i], r[i].radiusKm))
-    right.push(destinationPoint(r[i + 1].center, rightB[i], r[i + 1].radiusKm))
-  }
-
-  const lastSeg = r.length - 2
-  const last = r[r.length - 1]
-  const first = r[0]
-
-  // Front cap: left tangent → around the nose → right tangent.
-  const endCap = last.radiusKm > 0
-    ? arcPoints(last.center, last.radiusKm, leftB[lastSeg],
-        ((bearingDelta(leftB[lastSeg], rightB[lastSeg]) + 360) % 360) || 180, CAP_STEPS)
-    : []
-
-  // Back cap: right tangent → around the tail → left tangent.
-  const startCap = first.radiusKm > 0
-    ? arcPoints(first.center, first.radiusKm, rightB[0],
-        ((bearingDelta(rightB[0], leftB[0]) + 360) % 360) || 180, CAP_STEPS)
-    : []
-
-  return [...left, ...endCap, ...right.reverse(), ...startCap]
-    .map(p => [p.lat, p.lon] as [number, number])
+export function coneCircles(rings: ConeRing[]): Array<Array<[number, number]>> {
+  if (!rings.length) return []
+  const thinned = rings.filter((r, i) =>
+    i === 0 || i === rings.length - 1 || r.hour % 24 === 0)
+  return thinned
+    .filter(r => r.radiusKm > 0)
+    .map(r => circlePoints(r.center, r.radiusKm, CIRCLE_STEPS)
+      .map(p => [p.lat, p.lon] as [number, number]))
 }

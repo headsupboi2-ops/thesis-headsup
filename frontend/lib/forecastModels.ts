@@ -97,6 +97,19 @@ function seededRandom(seedStr: string): () => number {
   }
 }
 
+/** Great-circle bearing (radians) from the track's first point to its last.
+ *  Falls back to 0 (north) for a degenerate/near-empty track. */
+function trackHeadingRad(track: ModelTrackPoint[]): number {
+  if (track.length < 2) return 0
+  const a = track[0], b = track[track.length - 1]
+  const RAD = Math.PI / 180
+  const lat1 = a.lat * RAD, lon1 = a.lon * RAD
+  const lat2 = b.lat * RAD, lon2 = b.lon * RAD
+  const y = Math.sin(lon2 - lon1) * Math.cos(lat2)
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1)
+  return Math.atan2(y, x)
+}
+
 export function generateEnsembleSpaghettiPlot(
   baseTrack: ModelTrackPoint[],
   stormName: string,
@@ -109,8 +122,13 @@ export function generateEnsembleSpaghettiPlot(
       }
     }
     const rnd = seededRandom(`${stormName.toUpperCase()}:${model}`)
-    const biasDir = rnd() * 2 * Math.PI
-    const biasMag = 0.5 + rnd() * 1.7
+    // Fan out ACROSS the track's own heading, like a real cone of
+    // uncertainty (narrow near the storm, widening along the path) — not in
+    // arbitrary directions, which used to balloon the cone into a blob.
+    const heading = trackHeadingRad(baseTrack)
+    const side = rnd() < 0.5 ? -1 : 1
+    const biasDir = heading + side * (60 + rnd() * 60) * Math.PI / 180
+    const biasMag = 0.15 + rnd() * 0.65
     const wobAmp = 0.1 + rnd() * 0.35
     const wobFreq = 0.6 + rnd()
     const wobPhase = rnd() * 2 * Math.PI

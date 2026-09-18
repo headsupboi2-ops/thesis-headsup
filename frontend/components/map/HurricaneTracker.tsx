@@ -11,7 +11,7 @@ import { useParBroadcastEngine } from '@/hooks/useParBroadcastEngine'
 import { useForecastDrift } from '@/hooks/useForecastDrift'
 import { useDemoScenario } from '@/hooks/useDemoScenario'
 import { ModelLegend } from './ModelLegend'
-import { coneRings, buildConePolygon, scoreUncertainty, UNCERTAINTY_META } from '@/lib/uncertainty'
+import { coneRings, coneCircles, scoreUncertainty, UNCERTAINTY_META } from '@/lib/uncertainty'
 
 interface StormPoint { lat: number; lon: number }
 interface LiveStorm {
@@ -441,8 +441,8 @@ export function HurricaneTracker() {
           if (!tracks || tracks.length < 2) continue
 
           const rings = coneRings(tracks, { lat: storm.info.lat, lon: storm.info.lon })
-          const ring = buildConePolygon(rings)
-          if (!ring) continue
+          const circles = coneCircles(rings)
+          if (!circles.length) continue
 
           // Cone colour reflects how uncertain the forecast is. The score is
           // computed from every fetched track, NOT only the models enabled in
@@ -452,17 +452,23 @@ export function HurricaneTracker() {
           const meta = UNCERTAINTY_META[score?.level ?? 'moderate']
           const simulated = score?.simulated ?? true
 
-          const poly = L.polygon(ring, {
-            pane: 'conePane',
-            color: meta.color,
-            weight: 1,
-            opacity: simulated ? 0.35 : 0.6,
-            dashArray: '5 5',
-            fillColor: meta.color,
-            fillOpacity: simulated ? 0.08 : 0.15,
-          })
-          poly.addTo(m)
-          layers.push(poly)
+          // Styled like the classic NHC "cone of uncertainty": one solid
+          // shaded funnel with a clean border, not a faint dashed outline
+          // that gets lost among the individually-dashed spaghetti tracks.
+          // Drawn as one circle per forecast day (their union IS the cone) —
+          // robust to sharp track turns, unlike a single hull outline.
+          for (const circle of circles) {
+            const poly = L.polygon(circle, {
+              pane: 'conePane',
+              color: meta.color,
+              weight: 1.5,
+              opacity: simulated ? 0.55 : 0.85,
+              fillColor: meta.color,
+              fillOpacity: simulated ? 0.22 : 0.35,
+            })
+            poly.addTo(m)
+            layers.push(poly)
+          }
         }
       } catch (err) {
         console.error('[HurricaneTracker] cone draw error:', err)
